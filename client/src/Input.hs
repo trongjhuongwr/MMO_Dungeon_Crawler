@@ -6,11 +6,10 @@ import qualified Data.Set as Set
 
 type KeyMap = Set.Set Key
 
--- | Tính toán vector di chuyển từ các phím đang được nhấn.
 -- WASD mapping.
 calculateMoveVector :: KeyMap -> Vec2
-calculateMoveVector km =
-  Vec2 (getX km) (getY km)
+calculateMoveVector keyMap =
+  Vec2 (getX keyMap) (getY keyMap)
   where
     getX s | Set.member (Char 'd') s = 1.0
            | Set.member (Char 'a') s = -1.0
