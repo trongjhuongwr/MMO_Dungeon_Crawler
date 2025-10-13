@@ -18,6 +18,7 @@ dependencies:
   - shared
   - gloss
   - gloss-juicy
+  - JuicyPixels
   - containers
 
 # Thêm dependency định nghĩa cho test suite
