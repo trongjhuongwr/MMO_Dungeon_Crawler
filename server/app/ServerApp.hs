@@ -4,17 +4,18 @@ import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.MVar
 import Control.Monad (forever)
 import Network.Socket
+import qualified Data.Map as Map
 
 import Core.Types (initialGameState, GameState(..), Command(..))
 import Network.UDPServer (udpListenLoop)
-import Systems.PhysicsSystem (updatePhysics)
+import Systems.PhysicsSystem (updatePlayerPhysics, updateBulletPhysics, filterDeadEntities)
+import Systems.CombatSystem (spawnNewBullets, resolveCollisions)
 import Network.Packet (WorldSnapshot(..))
 import Data.Binary (encode)
 
--- 1. Import các module cần thiết
 import qualified Data.ByteString.Lazy as LBS
-import qualified Network.Socket.ByteString as BS -- Dùng cho bản Strict
-import Data.ByteString.Lazy.Internal (toStrict) -- Dùng để chuyển đổi
+import qualified Network.Socket.ByteString as BS
+import Data.ByteString.Lazy.Internal (toStrict)
 
 tickRate :: Int
 tickRate = 30
@@ -35,29 +36,39 @@ runServer = withSocketsDo $ do
 
 gameLoop :: Socket -> MVar GameState -> IO ()
 gameLoop sock gameStateRef = forever $ do
-  -- Lấy và cập nhật state
   gs <- takeMVar gameStateRef
+  let dt = fromIntegral tickInterval / 1000000.0
 
-  -- 1. Xử lý vật lý
-  let newGameState = updatePhysics (fromIntegral tickInterval / 1000000.0) gs
-
-  -- 2. Tạo snapshot và gửi cho client
-  let snapshot = WorldSnapshot { wsPlayers = gsPlayers newGameState }
-  let clientAddrs = uniqueClientAddrs (gsCommands gs)
+  -- 1. Cập nhật di chuyển của Player
+  let gs' = updatePlayerPhysics dt gs
   
-  -- 2. Sửa lỗi tại đây
+  -- 2. Cập nhật di chuyển của đạn (từ tick trước)
+  let gs'' = updateBulletPhysics dt gs'
+  
+  -- 3. Xử lý va chạm của đạn (đã di chuyển)
+  let gs''' = resolveCollisions gs''
+  
+  -- 4. Tạo đạn mới (từ input tick này)
+  let gs'''' = spawnNewBullets gs'''
+  
+  -- 5. Lọc bỏ các thực thể đã chết
+  let finalGameState = filterDeadEntities gs''''
+
+  -- 6. Tạo snapshot
+  let snapshot = WorldSnapshot
+        { wsPlayers = Map.elems (gsPlayers finalGameState)
+        , wsEnemies = gsEnemies finalGameState
+        , wsBullets = gsBullets finalGameState
+        }
   let lazySnapshot = encode snapshot
-  let strictSnapshot = toStrict lazySnapshot -- Chuyển sang Strict
+  let strictSnapshot = toStrict lazySnapshot
 
-  -- Gửi snapshot tới tất cả client bằng hàm của module Strict
-  mapM_ (\addr -> BS.sendTo sock strictSnapshot addr) clientAddrs
+  -- 7. Gửi snapshot tới tất cả client đã kết nối
+  let clientAddrs = Map.keys (gsPlayers finalGameState)
+  mapM_ (BS.sendTo sock strictSnapshot) clientAddrs
 
-  -- 3. Reset commands và tăng tick
-  let finalGameState = newGameState { gsTick = gsTick gs + 1, gsCommands = [] }
-  putMVar gameStateRef finalGameState
+  -- 8. Reset commands và tăng tick
+  let cleanGameState = finalGameState { gsTick = gsTick gs + 1, gsCommands = [] }
+  putMVar gameStateRef cleanGameState
   
   threadDelay tickInterval
-
--- Lấy danh sách địa chỉ client không trùng lặp
-uniqueClientAddrs :: [Command] -> [SockAddr]
-uniqueClientAddrs = foldr (\(Command addr _) acc -> if addr `elem` acc then acc else addr : acc) []

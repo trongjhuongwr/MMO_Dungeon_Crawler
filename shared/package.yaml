@@ -26,3 +26,5 @@ library:
     - Types.Tank
     - Types.Common
     - Network.Packet
+    - Types.Bullet
+    - Types.Enemy

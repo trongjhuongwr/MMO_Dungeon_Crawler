@@ -15,6 +15,7 @@ dependencies:
   - bytestring # Xử lý chuỗi byte hiệu quả
   - network    # Thư viện cho lập trình socket
   - binary     # Để mã hóa/giải mã gói tin
+  - containers
   # Đây là phần quan trọng nhất: liên kết đến gói 'shared'
   - shared
 
