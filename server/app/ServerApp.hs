@@ -65,7 +65,6 @@ gameLoop sock gameStateRef = forever $ do
 
   -- 7. Gửi snapshot tới tất cả client đã kết nối
   let clientAddrs = Map.keys (gsPlayers finalGameState)
-  -- SỬA LỖI (hlint): "Avoid lambda"
   mapM_ (BS.sendTo sock strictSnapshot) clientAddrs
 
   -- 8. Reset commands và tăng tick

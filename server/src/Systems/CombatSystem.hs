@@ -1,4 +1,3 @@
--- THAY ĐỔI: Tên module và danh sách export
 module Systems.CombatSystem (spawnNewBullets, resolveCollisions) where
 
 import Core.Types (GameState(..), Command(..))
@@ -15,12 +14,11 @@ bulletSpeed = 300.0
 bulletLifetime :: Float
 bulletLifetime = 2.0
 
--- | HÀM MỚI (Tách ra từ resolveCombat): Chỉ xử lý va chạm
--- SỬA LỖI (hlint): Eta reduce
+-- | (Tách ra từ resolveCombat): Chỉ xử lý va chạm
 resolveCollisions :: GameState -> GameState
 resolveCollisions = checkCollisions
 
--- | HÀM MỚI (Tách ra từ resolveCombat): Chỉ tạo đạn
+-- | (Tách ra từ resolveCombat): Chỉ tạo đạn
 spawnNewBullets :: GameState -> GameState
 spawnNewBullets gs =
   let
@@ -79,7 +77,6 @@ findCollisions :: [BulletState] -> [EnemyState] -> ([Int], [Int])
 findCollisions bullets enemies =
   let
     pairs = [(b, e) | b <- bullets, e <- enemies]
-    -- SỬA LỖI (hlint): Bỏ ngoặc đơn
     collisions = filter isColliding pairs
     
     collidedBulletIds = map (bsId . fst) collisions

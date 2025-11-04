@@ -4,7 +4,7 @@ import Network.Socket
 import Data.Binary (encode, decodeOrFail)
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar
-import Control.Monad (forever) -- <<< Gỡ bỏ 'when'
+import Control.Monad (forever, when)
 import Graphics.Gloss.Interface.IO.Game
 import Graphics.Gloss.Juicy (fromDynamicImage, loadJuicyPNG)
 import qualified Data.Set as Set
@@ -22,12 +22,11 @@ import Types.Enemy (EnemyState(..))
 import Network.Packet
 import Input (KeyMap, calculateMoveVector)
 import Core.Renderer (render, GameAssets(..), loadSpriteSheet)
-import Core.Effect
-import Core.Animation
+import Core.Effect (Effect(..), makeExplosion, updateEffect, isEffectFinished)
+import Core.Animation (Animation(..), updateAnimation, startAnimation)
 
 import Codec.Picture (readImage, DynamicImage(..), convertRGBA8, pixelAt, generateImage)
 
--- (ClientState và initial... không đổi)
 data ClientState = ClientState
   { csKeys         :: KeyMap
   , csMousePos     :: (Float, Float)
@@ -35,10 +34,14 @@ data ClientState = ClientState
   , csDidFire      :: Bool
   , csEffects      :: [Effect]
   , csNextEffectId :: Int
+  , csTurretAnim   :: Animation
   }
 
 initialWorldSnapshot :: WorldSnapshot
 initialWorldSnapshot = WorldSnapshot { wsPlayers = [], wsEnemies = [], wsBullets = [] }
+
+dummyAnim :: Animation
+dummyAnim = Animation [] 0 0 0 False
 
 initialClientState :: ClientState
 initialClientState = ClientState
@@ -48,6 +51,7 @@ initialClientState = ClientState
   , csDidFire = False
   , csEffects = []
   , csNextEffectId = 0
+  , csTurretAnim = dummyAnim
   }
 
 main :: IO ()
@@ -62,7 +66,6 @@ main = withSocketsDo $ do
       addr <- head <$> getAddrInfo (Just defaultHints { addrSocketType = Datagram }) (Just "127.0.0.1") (Just "8888")
       runGame (addrAddress addr) sock assets
 
--- (loadSprite không đổi)
 loadSprite :: FilePath -> (Int, Int) -> (Int, Int) -> IO (Maybe Picture)
 loadSprite path (x, y) (w, h) = do
   eImg <- readImage path
@@ -73,35 +76,46 @@ loadSprite path (x, y) (w, h) = do
           cropped = generateImage (\i j -> pixelAt rgba (x + i) (y + j)) w h
       in return $ fromDynamicImage (ImageRGBA8 cropped)
 
--- | SỬA KÍCH THƯỚC FRAME
 loadResources :: IO (Either String GameAssets)
 loadResources = do
   mTankBody <- loadSprite "client/assets/textures/tanks/rapid_tank/body.png" (0, 0) (128, 128)
-  mTankTurret <- loadSprite "client/assets/textures/tanks/rapid_tank/turret.png" (0, 0) (128, 128)
+  eTurretImg <- readImage "client/assets/textures/tanks/rapid_tank/turret.png" 
   mBullet <- loadJuicyPNG "client/assets/textures/projectiles/bullet_normal.png"
   eExplosionImg <- readImage "client/assets/textures/projectiles/explosion_spritesheet_blast.png"
 
-  case (mTankBody, mTankTurret, mBullet, eExplosionImg) of
-    (Just body, Just turret, Just bullet, Right dynExplosionImg) ->
+  case (mTankBody, eTurretImg, mBullet, eExplosionImg) of
+    (Just body, Right dynTurretImg, Just bullet, Right dynExplosionImg) ->
       let
+        turretFrames = loadSpriteSheet dynTurretImg 128 128 8 
         explosionFrames = loadSpriteSheet dynExplosionImg 256 256 8 
       in
         return $ Right $ GameAssets
           { gaTankBody = body
-          , gaTankTurret = turret
+          , gaTurretFrames = turretFrames
           , gaBullet = bullet
           , gaExplosionFrames = explosionFrames
           }
     _ -> return $ Left "Failed to load one or more assets"
 
--- | SỬA: Đổi nền thành 'black'
 runGame :: SockAddr -> Socket -> GameAssets -> IO ()
 runGame serverAddr sock assets = do
-  clientStateRef <- newMVar initialClientState
+  let turretAnim = Animation
+        { animFrames = gaTurretFrames assets
+        , animFrameTime = 0.05
+        , animTimer = 0
+        , animCurrentFrame = length (gaTurretFrames assets)
+        , animLoops = False
+        }
+  let initialState = initialClientState { csTurretAnim = turretAnim }
+  
+  clientStateRef <- newMVar initialState
+  
   putStrLn "[DEBUG] Sending initial handshake packet..."
   let initialCmd = encode (PlayerCommand (Vec2 0 0) 0.0 False)
   _ <- BS.sendTo sock (toStrict initialCmd) serverAddr
+  
   _ <- forkIO $ networkListenLoop sock assets clientStateRef
+  
   playIO
     (InWindow "MMO Dungeon Crawler" (800, 600) (10, 10))
     black
@@ -114,7 +128,11 @@ runGame serverAddr sock assets = do
 renderIO :: GameAssets -> MVar ClientState -> IO Picture
 renderIO assets mvar = do
   cs <- readMVar mvar
-  return $ render assets (csWorld cs) (csEffects cs)
+  -- Log debug
+  -- let effectCount = length (csEffects cs)
+  -- when (effectCount > 0) $
+  --   putStrLn $ "[DEBUG Render] Rendering " ++ show effectCount ++ " effects."
+  return $ render assets (csWorld cs) (csEffects cs) (csTurretAnim cs)
 
 networkListenLoop :: Socket -> GameAssets -> MVar ClientState -> IO ()
 networkListenLoop sock assets stateRef = forever $ do
@@ -138,6 +156,10 @@ networkListenLoop sock assets stateRef = forever $ do
                 let effect = makeExplosion nextId (gaExplosionFrames assets) (bsPosition bullet)
                 in (nextId + 1, effect : effects)
           
+          -- Log debug
+          -- _ = when (not (null newEffects)) $
+          --       putStrLn $ "[DEBUG Network] Created " ++ show (length newEffects) ++ " new effects."
+          
         in
           pure cs { csWorld = newSnapshot, csEffects = csEffects cs ++ newEffects, csNextEffectId = newNextId }
         )
@@ -146,7 +168,7 @@ handleInput :: Event -> ClientState -> ClientState
 handleInput event cs =
   case event of
     EventKey (MouseButton LeftButton) Down _ _ ->
-      cs { csDidFire = True }
+      cs { csDidFire = True, csTurretAnim = startAnimation (csTurretAnim cs) }
     EventKey key Down _ _ ->
       let newKeys = Set.insert key (csKeys cs)
       in cs { csKeys = newKeys }
@@ -178,19 +200,32 @@ sendPlayerCommand serverAddr sock cs = do
   _ <- BS.sendTo sock strictMsg serverAddr
   return ()
 
+-- | HÀM THUẦN TÚY (ĐÃ SỬA LỖI BUILD)
 updateClient :: Float -> ClientState -> ClientState
 updateClient dt cs =
   let
+    -- Cập nhật hiệu ứng nổ
     updatedEffects = map (updateEffect dt) (csEffects cs)
+    -- <<< SỬA LỖI: Dùng 'isEffectFinished'
     activeEffects = filter (not . isEffectFinished) updatedEffects
+    
+    -- Cập nhật animation nòng súng
+    newTurretAnim = updateAnimation dt (csTurretAnim cs)
   in
-    cs { csEffects = activeEffects, csDidFire = False }
+    cs { csEffects = activeEffects, csDidFire = False, csTurretAnim = newTurretAnim }
 
+-- | HÀM IO (SỬA hlint)
 updateClientIO :: SockAddr -> Socket -> Float -> MVar ClientState -> IO (MVar ClientState)
 updateClientIO serverAddr sock dt mvar = do
   cs <- readMVar mvar
   sendPlayerCommand serverAddr sock cs
   let cs' = updateClient dt cs
+  
+  -- Dọn dẹp log debug
+  -- let oldEffectCount = length (csEffects cs)
+  -- let newEffectCount = length (csEffects cs')
+  -- when (oldEffectCount > 0) $
+  --   putStrLn $ "[DEBUG Update] Updating effects: " ++ show oldEffectCount ++ " -> " ++ show newEffectCount
   
   _ <- swapMVar mvar cs' 
   

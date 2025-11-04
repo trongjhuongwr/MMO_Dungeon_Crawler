@@ -7,14 +7,14 @@ import Types.Common (Vec2(..))
 import Types.Bullet (BulletState(..))
 import Types.Enemy (EnemyState(..))
 import Core.Effect (Effect(..))
-import Core.Animation (getCurrentFrame)
+import Core.Animation (Animation, getCurrentFrame) 
 import Codec.Picture (generateImage, pixelAt, convertRGBA8, DynamicImage(ImageRGBA8))
 import Graphics.Gloss.Juicy (fromDynamicImage)
-import Data.Maybe (catMaybes)
+import Data.Maybe (mapMaybe)
 
 data GameAssets = GameAssets
   { gaTankBody        :: Picture
-  , gaTankTurret      :: Picture
+  , gaTurretFrames    :: [Picture]
   , gaBullet          :: Picture
   , gaExplosionFrames :: [Picture]
   }
@@ -33,32 +33,57 @@ loadSpriteSheet dynImg frameWidth frameHeight frameCount =
       in
         fromDynamicImage (ImageRGBA8 cropped)
   in
-    catMaybes (map cropFrame frames)
+    mapMaybe cropFrame frames
 
-render :: GameAssets -> WorldSnapshot -> [Effect] -> Picture
-render assets snapshot effects =
-  Pictures $
-    map (drawPlayer assets) (wsPlayers snapshot) ++
-    map drawEnemy (wsEnemies snapshot) ++
-    map (drawBullet assets) (wsBullets snapshot) ++
-    map (drawEffect assets) effects
+render :: GameAssets -> WorldSnapshot -> [Effect] -> Animation -> Picture
+render assets snapshot effects turretAnim =
+  let
+    (ourPlayer, otherPlayers) = case wsPlayers snapshot of
+                                  (p:ps) -> (Just p, ps)
+                                  []     -> (Nothing, [])
+    
+    ourPlayerPic = case ourPlayer of
+                     Just p  -> [drawOurPlayer assets p turretAnim]
+                     Nothing -> []
+    
+    otherPlayerPics = map (drawOtherPlayer assets) otherPlayers
+  in
+    Pictures $
+      ourPlayerPic ++ otherPlayerPics ++
+      map drawEnemy (wsEnemies snapshot) ++
+      map (drawBullet assets) (wsBullets snapshot) ++
+      map (drawEffect assets) effects
 
-drawPlayer :: GameAssets -> PlayerState -> Picture
-drawPlayer assets ps =
+drawOurPlayer :: GameAssets -> PlayerState -> Animation -> Picture
+drawOurPlayer assets ps anim =
   let
     (x, y) = (vecX $ psPosition ps, vecY $ psPosition ps)
+    turretFrame = getCurrentFrame anim
   in
     Translate x y $ Pictures
       [ 
         Rotate (radToDeg $ psBodyAngle ps) (gaTankBody assets)
-      , Rotate (radToDeg $ psTurretAngle ps) (gaTankTurret assets)
+      , Rotate (radToDeg $ psTurretAngle ps) turretFrame
+      ]
+
+drawOtherPlayer :: GameAssets -> PlayerState -> Picture
+drawOtherPlayer assets ps =
+  let
+    (x, y) = (vecX $ psPosition ps, vecY $ psPosition ps)
+    turretFrame = if null (gaTurretFrames assets)
+                    then Blank
+                    else head (gaTurretFrames assets)
+  in
+    Translate x y $ Pictures
+      [ 
+        Rotate (radToDeg $ psBodyAngle ps) (gaTankBody assets)
+      , Rotate (radToDeg $ psTurretAngle ps) turretFrame
       ]
 
 drawBullet :: GameAssets -> BulletState -> Picture
 drawBullet assets bullet =
   let
     (x, y) = (vecX $ bsPosition bullet, vecY $ bsPosition bullet)
-    angle = atan2 (vecY $ bsVelocity bullet) (vecX $ bsPosition bullet)
     correctAngle = atan2 (vecY $ bsVelocity bullet) (vecX $ bsVelocity bullet)
   in
     Translate x y $
@@ -78,9 +103,7 @@ drawEffect _ effect =
     (x, y) = (vecX $ effPosition effect, vecY $ effPosition effect)
     frame = getCurrentFrame (effAnimation effect)
   in
-    -- Dùng 'Color white' để tô màu (tint) cho ảnh,
-    -- đảm bảo nó không bị pha trộn (blend) thành màu đen.
-    Translate x y $ Color white (Scale 0.5 0.5 frame)
+    Translate x y $ Color white (Scale 0.25 0.25 frame)
 
 radToDeg :: Float -> Float
 radToDeg r = r * 180 / pi
