@@ -28,6 +28,7 @@ library
       Types.Common
       Network.Packet
   other-modules:
+      Types.Map
       Paths_shared
   hs-source-dirs:
       src

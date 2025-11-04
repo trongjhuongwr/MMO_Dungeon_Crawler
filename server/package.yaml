@@ -17,6 +17,7 @@ dependencies:
   - binary     # Để mã hóa/giải mã gói tin
   # Đây là phần quan trọng nhất: liên kết đến gói 'shared'
   - shared
+  - JuicyPixels
 
 # Phần thư viện của server (chứa logic game)
 library:
