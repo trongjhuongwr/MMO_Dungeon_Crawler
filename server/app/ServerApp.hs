@@ -8,8 +8,8 @@ import qualified Data.Map as Map
 
 import Core.Types (initialGameState, GameState(..), Command(..))
 import Network.UDPServer (udpListenLoop)
-import Systems.PhysicsSystem (updatePlayerPhysics, updateBulletPhysics, filterDeadEntities) -- Import
-import Systems.CombatSystem (resolveCombat) -- Import
+import Systems.PhysicsSystem (updatePlayerPhysics, updateBulletPhysics, filterDeadEntities)
+import Systems.CombatSystem (spawnNewBullets, resolveCollisions)
 import Network.Packet (WorldSnapshot(..))
 import Data.Binary (encode)
 
@@ -25,7 +25,6 @@ tickInterval = 1000000 `div` tickRate
 
 runServer :: IO ()
 runServer = withSocketsDo $ do
-  -- ... (Phần khởi tạo không đổi) ...
   putStrLn "Starting MMO Dungeon Crawler server..."
   gameStateRef <- newMVar initialGameState
   sock <- socket AF_INET Datagram defaultProtocol
@@ -40,32 +39,36 @@ gameLoop sock gameStateRef = forever $ do
   gs <- takeMVar gameStateRef
   let dt = fromIntegral tickInterval / 1000000.0
 
-  -- 1. Cập nhật di chuyển của Player (từ PhysicsSystem)
+  -- 1. Cập nhật di chuyển của Player
   let gs' = updatePlayerPhysics dt gs
   
-  -- 2. Xử lý logic combat (tạo đạn, va chạm) (từ CombatSystem)
-  let gs'' = resolveCombat gs'
+  -- 2. Cập nhật di chuyển của đạn (từ tick trước)
+  let gs'' = updateBulletPhysics dt gs'
   
-  -- 3. Cập nhật di chuyển của đạn (từ PhysicsSystem)
-  let gs''' = updateBulletPhysics dt gs''
+  -- 3. Xử lý va chạm của đạn (đã di chuyển)
+  let gs''' = resolveCollisions gs''
   
-  -- 4. Lọc bỏ các thực thể đã chết (đạn hết giờ, quái hết máu)
-  let finalGameState = filterDeadEntities gs'''
+  -- 4. Tạo đạn mới (từ input tick này)
+  let gs'''' = spawnNewBullets gs'''
+  
+  -- 5. Lọc bỏ các thực thể đã chết
+  let finalGameState = filterDeadEntities gs''''
 
-  -- 5. Tạo snapshot
+  -- 6. Tạo snapshot
   let snapshot = WorldSnapshot
-        { wsPlayers = Map.elems (gsPlayers finalGameState) -- Chuyển Map thành List
+        { wsPlayers = Map.elems (gsPlayers finalGameState)
         , wsEnemies = gsEnemies finalGameState
         , wsBullets = gsBullets finalGameState
         }
   let lazySnapshot = encode snapshot
   let strictSnapshot = toStrict lazySnapshot
 
-  -- 6. Gửi snapshot tới tất cả client đã kết nối
+  -- 7. Gửi snapshot tới tất cả client đã kết nối
   let clientAddrs = Map.keys (gsPlayers finalGameState)
-  mapM_ (\addr -> BS.sendTo sock strictSnapshot addr) clientAddrs
+  -- SỬA LỖI (hlint): "Avoid lambda"
+  mapM_ (BS.sendTo sock strictSnapshot) clientAddrs
 
-  -- 7. Reset commands và tăng tick
+  -- 8. Reset commands và tăng tick
   let cleanGameState = finalGameState { gsTick = gsTick gs + 1, gsCommands = [] }
   putMVar gameStateRef cleanGameState
   

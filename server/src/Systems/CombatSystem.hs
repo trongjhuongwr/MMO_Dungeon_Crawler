@@ -1,4 +1,5 @@
-module Systems.CombatSystem (resolveCombat) where
+-- THAY ĐỔI: Tên module và danh sách export
+module Systems.CombatSystem (spawnNewBullets, resolveCollisions) where
 
 import Core.Types (GameState(..), Command(..))
 import Types.Player (PlayerState(..), PlayerCommand(..))
@@ -12,46 +13,46 @@ bulletSpeed :: Float
 bulletSpeed = 300.0
 
 bulletLifetime :: Float
-bulletLifetime = 2.0 -- Đạn sống trong 2 giây
+bulletLifetime = 2.0
 
--- | Hàm chính xử lý combat: tạo đạn mới và kiểm tra va chạm
-resolveCombat :: GameState -> GameState
-resolveCombat gs =
+-- | HÀM MỚI (Tách ra từ resolveCombat): Chỉ xử lý va chạm
+-- SỬA LỖI (hlint): Eta reduce
+resolveCollisions :: GameState -> GameState
+resolveCollisions = checkCollisions
+
+-- | HÀM MỚI (Tách ra từ resolveCombat): Chỉ tạo đạn
+spawnNewBullets :: GameState -> GameState
+spawnNewBullets gs =
   let
-    -- 1. Tạo đạn mới từ các lệnh "bắn"
-    (gsWithNewBullets, newNextId) = spawnNewBullets gs (gsCommands gs) (gsPlayers gs) (gsNextId gs)
-    
-    -- 2. Kiểm tra va chạm
-    gsAfterCollisions = checkCollisions gsWithNewBullets
+    (gsWithNewBullets, newNextId) =
+      go (gsCommands gs) (gsPlayers gs) (gsNextId gs) gs
   in
-    gsAfterCollisions { gsNextId = newNextId }
-
--- | Tạo đạn mới
-spawnNewBullets :: GameState -> [Command] -> Map.Map SockAddr PlayerState -> Int -> (GameState, Int)
-spawnNewBullets gs [] _ nextId = (gs, nextId) -- Hết lệnh
-spawnNewBullets gs (Command addr (PlayerCommand _ _ False) : cmds) players nextId =
-  spawnNewBullets gs cmds players nextId -- Lệnh này không bắn
-spawnNewBullets gs (Command addr (PlayerCommand _ _ True) : cmds) players nextId =
-  -- Lệnh này CÓ bắn
-  case Map.lookup addr players of
-    Nothing -> spawnNewBullets gs cmds players nextId -- Player không tồn tại?
-    Just player ->
-      let
-        angle = psTurretAngle player
-        vel = Vec2 (sin angle) (cos angle) *^ bulletSpeed
-        pos = psPosition player + (vel *^ 0.05) -- Spawn hơi lệch về phía trước
-        
-        newBullet = BulletState
-          { bsId = nextId
-          , bsPosition = pos
-          , bsVelocity = vel
-          , bsLifetime = bulletLifetime
-          }
-        
-        newGameState = gs { gsBullets = newBullet : gsBullets gs }
-        newNextId = nextId + 1
-      in
-        spawnNewBullets newGameState cmds players newNextId
+    gsWithNewBullets { gsNextId = newNextId }
+  where
+    go :: [Command] -> Map.Map SockAddr PlayerState -> Int -> GameState -> (GameState, Int)
+    go [] _ nextId currentGs = (currentGs, nextId) -- Hết lệnh
+    go (Command addr (PlayerCommand _ _ False) : cmds) players nextId currentGs =
+      go cmds players nextId currentGs -- Lệnh này không bắn
+    go (Command addr (PlayerCommand _ _ True) : cmds) players nextId currentGs =
+      case Map.lookup addr players of
+        Nothing -> go cmds players nextId currentGs -- Player không tồn tại?
+        Just player ->
+          let
+            angle = psTurretAngle player
+            vel = Vec2 (sin angle) (cos angle) *^ bulletSpeed
+            pos = psPosition player + (vel *^ 0.05)
+            
+            newBullet = BulletState
+              { bsId = nextId
+              , bsPosition = pos
+              , bsVelocity = vel
+              , bsLifetime = bulletLifetime
+              }
+            
+            newGameState = currentGs { gsBullets = newBullet : gsBullets currentGs }
+            newNextId = nextId + 1
+          in
+            go cmds players newNextId newGameState
 
 -- | Kiểm tra và xử lý va chạm
 checkCollisions :: GameState -> GameState
@@ -60,49 +61,39 @@ checkCollisions gs =
     bullets = gsBullets gs
     enemies = gsEnemies gs
     
-    -- Tìm ID của đạn và quái đã va chạm
     (collidedBulletIds, collidedEnemyIds) = findCollisions bullets enemies
     
-    -- Lọc bỏ đạn đã va chạm
     remainingBullets = filter (\b -> bsId b `notElem` collidedBulletIds) bullets
-    
-    -- Lọc bỏ (hoặc giảm máu) quái đã va chạm
     remainingEnemies = map (damageEnemy collidedEnemyIds) enemies
-    -- (Trong Giai đoạn 2, chúng ta xóa luôn quái)
-    -- remainingEnemies = filter (\e -> esId e `notElem` collidedEnemyIds) enemies
 
   in
     gs { gsBullets = remainingBullets, gsEnemies = remainingEnemies }
 
--- (Đây là logic giảm máu, sẽ dùng ở Giai đoạn 2.2)
 damageEnemy :: [Int] -> EnemyState -> EnemyState
 damageEnemy collidedIds enemy =
   if esId enemy `elem` collidedIds
-    then enemy { esHealth = esHealth enemy - 1 } -- Giảm 1 máu
+    then enemy { esHealth = esHealth enemy - 1 }
     else enemy
 
--- | Tìm các cặp va chạm (O(n*m) - không tối ưu nhưng đủ dùng)
 findCollisions :: [BulletState] -> [EnemyState] -> ([Int], [Int])
 findCollisions bullets enemies =
   let
     pairs = [(b, e) | b <- bullets, e <- enemies]
-    collisions = filter (isColliding) pairs
+    -- SỬA LỖI (hlint): Bỏ ngoặc đơn
+    collisions = filter isColliding pairs
     
     collidedBulletIds = map (bsId . fst) collisions
     collidedEnemyIds  = map (esId . snd) collisions
   in
     (collidedBulletIds, collidedEnemyIds)
 
--- | Kiểm tra va chạm AABB (hình chữ nhật) đơn giản
 isColliding :: (BulletState, EnemyState) -> Bool
 isColliding (bullet, enemy) =
   let
     (Vec2 bx by) = bsPosition bullet
     (Vec2 ex ey) = esPosition enemy
     
-    -- Giả sử quái có kích thước 20x20 (vì ta vẽ bán kính 10)
     enemyHalfWidth = 10.0
-    -- Giả sử đạn có kích thước 4x4
     bulletHalfWidth = 2.0
     
     collidesX = abs (bx - ex) < (enemyHalfWidth + bulletHalfWidth)
