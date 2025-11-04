@@ -19,7 +19,7 @@ render :: GameAssets -> WorldSnapshot -> Picture
 render assets snapshot =
   Pictures $
     map (drawPlayer assets) (wsPlayers snapshot) ++
-    map drawEnemy (wsEnemies snapshot) ++ -- <--- SỬA LỖI (bỏ ngoặc)
+    map drawEnemy (wsEnemies snapshot) ++
     map (drawBullet assets) (wsBullets snapshot)
 
 -- | Vẽ một người chơi (xe tăng)
@@ -44,9 +44,9 @@ drawBullet assets bullet =
     angle = atan2 (vecY $ bsVelocity bullet) (vecX $ bsVelocity bullet)
   in
     Translate x y $
-    -- Xoay 90 độ vì asset đạn hướng lên trên
-    Rotate (radToDeg angle - 90) $
-    Scale 0.5 0.5 (gaBullet assets) -- Thu nhỏ ảnh đạn nếu cần
+    -- psTurretAngle (độ) = (90 - radToDeg angle)
+    Rotate (90 - radToDeg angle) $
+    Scale 0.25 0.25 (gaBullet assets) -- Thu nhỏ ảnh đạn nếu cần
 
 -- | Vẽ một quái (hiện tại là hình tròn đỏ)
 drawEnemy :: EnemyState -> Picture

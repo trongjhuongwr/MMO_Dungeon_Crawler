@@ -136,13 +136,17 @@ sendPlayerCommand :: SockAddr -> Socket -> ClientState -> IO ()
 sendPlayerCommand serverAddr sock cs = do
   let moveVec     = calculateMoveVector (csKeys cs)
   let (mouseX, mouseY) = csMousePos cs
-  let turretAngle = atan2 mouseY mouseX - (pi / 2)
   
-  -- Xây dựng gói tin PlayerCommand mới
+  -- 1. Tính góc toán học (0=phải), lật ngược trục y của chuột (vì 0,0 là top-left)
+  let mathAngle = atan2 mouseY mouseX 
+  
+  -- 2. Chuyển sang góc của Gloss/Server (0 = lên trên)
+  let glossAngle = mathAngle - (pi / 2)
+  
   let command = PlayerCommand
         { pcMoveVec     = moveVec
-        , pcTurretAngle = -turretAngle -- Vẫn giữ đảo ngược góc quay
-        , pcDidFire     = csDidFire cs -- Gửi trạng thái bắn
+        , pcTurretAngle = -(glossAngle)
+        , pcDidFire     = csDidFire cs
         }
         
   -- putStrLn $ "[DEBUG] Sending command: " ++ show command
