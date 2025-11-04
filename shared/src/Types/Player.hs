@@ -16,10 +16,11 @@ data PlayerState = PlayerState
 instance Binary PlayerState
 
 -- | Lệnh do người chơi gửi lên server.
-data PlayerCommand
-  = Move Vec2         -- Vector di chuyển (ví dụ: W=(0,1), A=(-1,0))
-  | Aim Float         -- Góc nòng súng (radians)
-  | MoveAndAim Vec2 Float -- Gửi cả hai trong một gói tin
-  deriving (Show, Generic)
+-- | THAY ĐỔI: Chuyển sang dạng record để gửi toàn bộ input trong 1 gói tin.
+data PlayerCommand = PlayerCommand
+  { pcMoveVec     :: Vec2    -- Input di chuyển (WASD)
+  , pcTurretAngle :: Float   -- Góc nòng súng (từ chuột)
+  , pcDidFire     :: Bool    -- True nếu người chơi nhấn bắn ở frame này
+  } deriving (Show, Generic)
 
 instance Binary PlayerCommand

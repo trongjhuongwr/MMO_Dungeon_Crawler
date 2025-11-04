@@ -2,10 +2,11 @@ module Systems.EntitySystem (updatePlayerState) where
 
 import Core.Types (GameState(..))
 import Types.Player (PlayerState(..))
+-- Thêm import này để chuẩn bị cho sau này
+import qualified Data.Map as Map
 
 -- | Hàm này sẽ tìm và cập nhật trạng thái cho một người chơi cụ thể.
--- Hiện tại, để đơn giản, chúng ta giả định chỉ có một người chơi và cập nhật thẳng.
--- Sau này sẽ cần playerId để phân biệt.
+-- Hiện tại, logic cập nhật player đã được chuyển sang PhysicsSystem.
+-- Hàm này được giữ lại làm placeholder và sẽ được sửa đổi khi cần.
 updatePlayerState :: PlayerState -> GameState -> GameState
-updatePlayerState newPlayerState gs =
-  gs { gsPlayers = [newPlayerState] } -- Ghi đè state của người chơi đầu tiên
+updatePlayerState _newPlayerState gs = gs
