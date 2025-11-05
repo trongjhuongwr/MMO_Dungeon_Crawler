@@ -76,7 +76,7 @@ main = withSocketsDo $ do
     Right assets -> do
       putStrLn "Assets loaded successfully. Starting game..."
       
-      let mapToLoad = "client/assets/maps/dungeon_level_1.json" 
+      let mapToLoad = "client/assets/maps/pvp.json" 
       putStrLn $ "[Client] Loading map: " ++ mapToLoad
       eMapData <- loadMapFromFile mapToLoad
       

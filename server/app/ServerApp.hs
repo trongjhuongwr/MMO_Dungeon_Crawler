@@ -32,7 +32,7 @@ runServer = withSocketsDo $ do
   
   -- ===== BƯỚC TẢI MAP MỚI =====
   -- (Sau này, logic này sẽ do PartySystem gọi)
-  let mapToLoad = "server/assets/maps/dungeon_level_1.json" 
+  let mapToLoad = "server/assets/maps/pvp.json" 
   -- (Để test PvP, đổi file này thành "pvp_arena_1.json")
   
   putStrLn $ "Loading map: " ++ mapToLoad
