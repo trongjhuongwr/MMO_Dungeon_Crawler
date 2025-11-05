@@ -17,9 +17,9 @@ dependencies:
   - binary     # Để mã hóa/giải mã gói tin
   - containers
   - array      # Cho GameMap
-  # Đây là phần quan trọng nhất: liên kết đến gói 'shared'
   - shared
   - JuicyPixels
+  - aeson
 
 # Phần thư viện của server (chứa logic game)
 library:

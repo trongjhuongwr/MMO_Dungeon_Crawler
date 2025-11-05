@@ -35,10 +35,10 @@ library
       Network.UDPServer
       Systems.AISystem
       Systems.CombatSystem
-      Systems.DungeonSystem
       Systems.EffectSystem
       Systems.EntitySystem
       Systems.ItemSystem
+      Systems.MapLoader
       Systems.PartySystem
       Systems.PhysicsSystem
       Systems.SkillSystem
@@ -50,6 +50,7 @@ library
       src
   build-depends:
       JuicyPixels
+    , aeson
     , array
     , base >=4.7 && <5
     , binary
@@ -70,6 +71,7 @@ executable mmo-server
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       JuicyPixels
+    , aeson
     , array
     , base >=4.7 && <5
     , binary
