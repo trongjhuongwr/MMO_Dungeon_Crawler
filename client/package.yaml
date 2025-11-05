@@ -20,6 +20,7 @@ dependencies:
   - gloss-juicy
   - JuicyPixels
   - containers
+  - array
 
 # Thêm dependency định nghĩa cho test suite
   - hspec

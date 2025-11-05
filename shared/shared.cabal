@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.38.1.
+-- This file has been generated from package.yaml by hpack version 0.37.0.
 --
 -- see: https://github.com/sol/hpack
 
@@ -26,15 +26,18 @@ library
       Types.Player
       Types.Tank
       Types.Common
+      Types.Map
       Network.Packet
       Types.Bullet
       Types.Enemy
   other-modules:
-      Types.Map
       Paths_shared
   hs-source-dirs:
       src
   build-depends:
-      base >=4.7 && <5
+      array
+    , base >=4.7 && <5
     , binary
+    , cereal
+    , deepseq
   default-language: Haskell2010

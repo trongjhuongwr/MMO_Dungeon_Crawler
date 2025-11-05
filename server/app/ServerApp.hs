@@ -10,6 +10,7 @@ import Core.Types (initialGameState, GameState(..), Command(..))
 import Network.UDPServer (udpListenLoop)
 import Systems.PhysicsSystem (updatePlayerPhysics, updateBulletPhysics, filterDeadEntities)
 import Systems.CombatSystem (spawnNewBullets, resolveCollisions)
+import Systems.AISystem (updateAI)
 import Network.Packet (WorldSnapshot(..))
 import Data.Binary (encode)
 
@@ -39,35 +40,40 @@ gameLoop sock gameStateRef = forever $ do
   gs <- takeMVar gameStateRef
   let dt = fromIntegral tickInterval / 1000000.0
 
-  -- 1. Cập nhật di chuyển của Player
+  -- 1. Cập nhật di chuyển của Player (Đã có va chạm map)
   let gs' = updatePlayerPhysics dt gs
   
-  -- 2. Cập nhật di chuyển của đạn (từ tick trước)
-  let gs'' = updateBulletPhysics dt gs'
+  -- 2. THÊM MỚI: Cập nhật AI (Tính toán di chuyển cho quái)
+  let gs_ai = updateAI dt gs'
   
-  -- 3. Xử lý va chạm của đạn (đã di chuyển)
+  -- 3. Cập nhật di chuyển của đạn (từ tick trước)
+  let gs'' = updateBulletPhysics dt gs_ai
+  
+  -- 4. Xử lý va chạm của đạn (đã di chuyển)
   let gs''' = resolveCollisions gs''
   
-  -- 4. Tạo đạn mới (từ input tick này)
+  -- 5. Tạo đạn mới (từ input tick này)
   let gs'''' = spawnNewBullets gs'''
   
-  -- 5. Lọc bỏ các thực thể đã chết
+  -- 6. Lọc bỏ các thực thể đã chết (đạn va chạm tường/hết giờ, quái hết máu)
   let finalGameState = filterDeadEntities gs''''
 
-  -- 6. Tạo snapshot
+  -- 7. Tạo snapshot
   let snapshot = WorldSnapshot
         { wsPlayers = Map.elems (gsPlayers finalGameState)
         , wsEnemies = gsEnemies finalGameState
         , wsBullets = gsBullets finalGameState
+        , wsMap     = gsMap finalGameState -- THÊM MỚI
         }
+  -- ... (gửi snapshot và kết thúc loop)
   let lazySnapshot = encode snapshot
   let strictSnapshot = toStrict lazySnapshot
 
-  -- 7. Gửi snapshot tới tất cả client đã kết nối
   let clientAddrs = Map.keys (gsPlayers finalGameState)
+  -- Gửi snapshot tới mọi client đã đăng ký
   mapM_ (BS.sendTo sock strictSnapshot) clientAddrs
+  putStrLn $ "[Server] Sent snapshot to " ++ show (length clientAddrs) ++ " client(s)"
 
-  -- 8. Reset commands và tăng tick
   let cleanGameState = finalGameState { gsTick = gsTick gs + 1, gsCommands = [] }
   putMVar gameStateRef cleanGameState
   

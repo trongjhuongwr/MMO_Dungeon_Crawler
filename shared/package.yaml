@@ -18,13 +18,17 @@ library:
   # Các thư viện mà gói 'shared' này phụ thuộc vào
   dependencies:
     - base >= 4.7 && < 5
-    - binary # Thư viện để mã hóa/giải mã dữ liệu
+    - binary      # Thư viện để mã hóa/giải mã dữ liệu
+    - deepseq     # Cho NFData
+    - cereal      # Cho Serialize
+    - array       # Cho kiểu dữ liệu Array
 
   # Các module mà gói này cung cấp cho các gói khác (server, client)
   exposed-modules:
     - Types.Player
     - Types.Tank
     - Types.Common
+    - Types.Map
     - Network.Packet
     - Types.Bullet
     - Types.Enemy
