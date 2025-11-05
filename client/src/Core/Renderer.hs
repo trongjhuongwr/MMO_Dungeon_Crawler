@@ -63,6 +63,11 @@ render assets gameMap snapshot effects turretAnim =
                      Just p  -> (vecX $ psPosition p, vecY $ psPosition p)
                      Nothing -> (0, 0)
                      
+    -- THÊM MỚI: Lấy góc thân xe của người chơi chính
+    playerBodyAngle = case ourPlayer of
+                        Just p -> psBodyAngle p
+                        Nothing -> 0.0 -- Mặc định nếu không tìm thấy người chơi
+                        
     -- LỚP 1: THẾ GIỚI GAME (Mọi thứ di chuyển theo camera)
     worldLayer = Pictures $
       [ mapPic ] ++
@@ -72,22 +77,24 @@ render assets gameMap snapshot effects turretAnim =
       map (drawEffect assets) effects
       
     -- LỚP 2: LỚP PHỦ TẦM NHÌN (Vignette)
-    -- Được vẽ ở (0, 0) (tâm màn hình) và không di chuyển
-    -- Scale ảnh 1024x768 lên một chút để đảm bảo che phủ
-    visionLayer = Scale 1.2 1.2 (resVignetteMask assets)
+    -- Được vẽ ở (0, 0) (tâm màn hình)
+    -- VÀ Xoay theo góc thân xe của người chơi
+    visionLayer =
+      Rotate (radToDeg playerBodyAngle) $ -- <-- THÊM PHÉP XOAY
+      Scale 1.2 1.2 (resVignetteMask assets)
       
   in
     Pictures
       [ -- 1. Di chuyển thế giới game
         Translate (-camX) (-camY) worldLayer
         
-        -- 2. Vẽ lớp phủ tầm nhìn (luôn ở tâm)
+        -- 2. Vẽ lớp phủ tầm nhìn (luôn ở tâm và xoay)
       , visionLayer
         
         -- 3. Vẽ HUD (thanh máu, v.v.)
       , hudPic 
       ]
-
+  
 -- SỬA ĐỔI: drawOurPlayer
 drawOurPlayer :: Resources -> PlayerState -> Animation -> Picture
 drawOurPlayer assets ps anim =

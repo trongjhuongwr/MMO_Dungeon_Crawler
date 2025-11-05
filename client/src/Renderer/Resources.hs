@@ -106,7 +106,7 @@ loadResources = do
   mBullet <- loadJuicyPNG "client/assets/textures/projectiles/bullet_normal.png"
   eExplosionImg <- readImage "client/assets/textures/projectiles/explosion_spritesheet_blast.png"
 
-  mVignette <- loadJuicyPNG "client/assets/textures/ui/vignette_mask.png"
+  mVignette <- loadJuicyPNG "client/assets/textures/ui/vignette_mask_01.png"
   -- Load Tile assets
   let allTileTypes = [minBound .. maxBound] :: [TileType]
   tilePairs <- fmap catMaybes $ forM allTileTypes $ \tt -> do
