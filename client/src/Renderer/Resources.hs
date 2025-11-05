@@ -1,22 +1,52 @@
 module Renderer.Resources
   ( loadResources
   , Resources(..)
-  , getTilePic
   ) where
 
 import Graphics.Gloss (Picture(..))
-import Graphics.Gloss.Juicy (loadJuicyPNG)  -- Using gloss-juicy instead
+import Graphics.Gloss.Juicy (loadJuicyPNG, fromDynamicImage)
 import Types.Map (TileType(..))
 import qualified Data.Map.Strict as Map
 import Control.Monad (forM)
-import Control.Exception (try, SomeException)
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, mapMaybe)
+import Codec.Picture (readImage, DynamicImage(..), convertRGBA8, pixelAt, generateImage)
 
--- | Chứa tất cả tài nguyên đã được load
+-- | HÀM TỪ Core/Renderer.hs (Di chuyển về đây)
+loadSpriteSheet :: DynamicImage -> Int -> Int -> Int -> [Picture]
+loadSpriteSheet dynImg frameWidth frameHeight frameCount =
+  let
+    rgba = convertRGBA8 dynImg
+    frames = [ (i, 0) | i <- [0..(frameCount-1)] ] 
+    
+    cropFrame (fx, fy) =
+      let
+        offsetX = fx * frameWidth
+        offsetY = fy * frameHeight
+        cropped = generateImage (\i j -> pixelAt rgba (offsetX + i) (offsetY + j)) frameWidth frameHeight
+      in
+        fromDynamicImage (ImageRGBA8 cropped)
+  in
+    mapMaybe cropFrame frames
+
+-- | HÀM TỪ Main.hs (Di chuyển về đây)
+loadSprite :: FilePath -> (Int, Int) -> (Int, Int) -> IO (Maybe Picture)
+loadSprite path (x, y) (w, h) = do
+  eImg <- readImage path
+  case eImg of
+    Left _ -> return Nothing
+    Right dynImg ->
+      let rgba = convertRGBA8 dynImg
+          cropped = generateImage (\i j -> pixelAt rgba (x + i) (y + j)) w h
+      in return $ fromDynamicImage (ImageRGBA8 cropped)
+
+-- SỬA ĐỔI: data Resources (thay thế cho GameAssets)
 data Resources = Resources
-  { resTiles :: Map.Map TileType Picture
-  , resTankBody :: Picture
-  , resTankTurret :: Picture
+  { resTiles          :: Map.Map TileType Picture
+  , resTankBody       :: Picture
+  , resTurretFrames   :: [Picture]
+  , resBullet         :: Picture
+  , resExplosionFrames :: [Picture]
+  , resVignetteMask   :: Picture
   }
 
 -- | Ánh xạ TileType sang đường dẫn file PNG tương ứng
@@ -67,19 +97,18 @@ tileTypeToPath tt = case tt of
   -- Empty tiles don't have an image
   Empty -> Nothing
 
-  -- Fallback for any future constructors
-  _ -> Nothing
-
--- | Hàm load TẤT CẢ tài nguyên game
-loadResources :: IO Resources
+-- SỬA ĐỔI: loadResources (tải TẤT CẢ)
+loadResources :: IO (Either String Resources)
 loadResources = do
-  tankBodyMaybe <- loadJuicyPNG "/assets/textures/tanks/rapid_tank/body.png"
-  tankTurretMaybe <- loadJuicyPNG "/assets/textures/tanks/rapid_tank/turret.png"
-  let tankBody = maybe Blank id tankBodyMaybe
-      tankTurret = maybe Blank id tankTurretMaybe
+  -- Load Player/FX assets
+  mTankBody <- loadSprite "client/assets/textures/tanks/rapid_tank/body.png" (0, 0) (128, 128)
+  eTurretImg <- readImage "client/assets/textures/tanks/rapid_tank/turret.png" 
+  mBullet <- loadJuicyPNG "client/assets/textures/projectiles/bullet_normal.png"
+  eExplosionImg <- readImage "client/assets/textures/projectiles/explosion_spritesheet_blast.png"
 
+  mVignette <- loadJuicyPNG "client/assets/textures/ui/vignette_mask_01.png"
+  -- Load Tile assets
   let allTileTypes = [minBound .. maxBound] :: [TileType]
-  
   tilePairs <- fmap catMaybes $ forM allTileTypes $ \tt -> do
     case tileTypeToPath tt of
       Nothing -> return Nothing
@@ -94,11 +123,19 @@ loadResources = do
   let tileMap = Map.fromList tilePairs
   putStrLn $ "Đã load " ++ show (Map.size tileMap) ++ " tile pictures."
   
-  return $ Resources
-    { resTiles = tileMap
-    , resTankBody = tankBody
-    , resTankTurret = tankTurret
-    }
-
-getTilePic :: Resources -> TileType -> Picture
-getTilePic res tt = Map.findWithDefault Blank tt (resTiles res)
+  -- Kiểm tra lỗi
+  case (mTankBody, eTurretImg, mBullet, eExplosionImg, mVignette) of
+    (Just body, Right dynTurretImg, Just bullet, Right dynExplosionImg, Just vignette) -> -- <-- THÊM
+      let
+        turretFrames = loadSpriteSheet dynTurretImg 128 128 8 
+        explosionFrames = loadSpriteSheet dynExplosionImg 256 256 8 
+      in
+        return $ Right $ Resources
+          { resTiles = tileMap
+          , resTankBody = body
+          , resTurretFrames = turretFrames
+          , resBullet = bullet
+          , resExplosionFrames = explosionFrames
+          , resVignetteMask = vignette
+          }
+    _ -> return $ Left "Failed to load critical assets (tank, bullet, explosion, or vignette)"

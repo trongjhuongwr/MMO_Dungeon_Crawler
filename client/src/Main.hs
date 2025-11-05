@@ -10,29 +10,29 @@ import Graphics.Gloss.Interface.IO.Game
 import Graphics.Gloss.Juicy (fromDynamicImage, loadJuicyPNG)
 import qualified Data.Set as Set
 import qualified Data.Map as Map
+import qualified Data.Array as Array
+import qualified Renderer.Resources as R
 import Data.List (foldl')
 
 import qualified Network.Socket.ByteString as BS (recvFrom, sendTo)
 import qualified Data.ByteString.Lazy as LBS
 import Data.ByteString.Lazy.Internal (fromStrict, toStrict)
+import Network.Packet
 
 import Types.Player
 import Types.Common
 import Types.Bullet (BulletState(..))
 import Types.Enemy (EnemyState(..))
 import Types.Map (GameMap(..), TileType(..)) -- <-- THÊM
-import qualified Data.Array as Array
-import Network.Packet
 import Input (KeyMap, calculateMoveVector)
-import Core.Renderer (render, GameAssets(..), loadSpriteSheet)
-import qualified Renderer.Resources as R
+import Core.Renderer (render)
 import Core.Effect (Effect(..), makeExplosion, updateEffect, isEffectFinished)
 import Core.Animation (Animation(..), updateAnimation, startAnimation)
-
-import qualified Data.Map as Map
-import Codec.Picture (readImage, DynamicImage(..), convertRGBA8, pixelAt, generateImage)
-
 import Systems.MapLoader (loadMapFromFile) 
+import Renderer.Resources (Resources(..))
+
+
+
 
 data ClientState = ClientState
   { csKeys         :: KeyMap
@@ -43,6 +43,7 @@ data ClientState = ClientState
   , csEffects      :: [Effect]
   , csNextEffectId :: Int
   , csTurretAnim   :: Animation
+  , csResources    :: Resources
   }
 
 initialWorldSnapshot :: WorldSnapshot
@@ -55,8 +56,8 @@ initialWorldSnapshot = WorldSnapshot
 dummyAnim :: Animation
 dummyAnim = Animation [] 0 0 0 False
 
-initialClientState :: GameMap -> ClientState
-initialClientState gmap = ClientState
+initialClientState :: GameMap -> Resources -> ClientState
+initialClientState gmap assets = ClientState
   { csKeys = Set.empty
   , csMousePos = (0, 0)
   , csWorld = initialWorldSnapshot
@@ -65,15 +66,19 @@ initialClientState gmap = ClientState
   , csEffects = []
   , csNextEffectId = 0
   , csTurretAnim = dummyAnim
+  , csResources = assets
   }
 
 main :: IO ()
 main = withSocketsDo $ do
   putStrLn "Starting client..."
-  eResources <- loadResources
+  
+  -- SỬA ĐỔI: Gọi hàm loadResources DUY NHẤT
+  eResources <- R.loadResources 
+  
   case eResources of
     Left err -> putStrLn $ "Failed to load resources: " ++ err
-    Right assets -> do
+    Right assets -> do -- 'assets' bây giờ là kiểu 'Resources'
       putStrLn "Assets loaded successfully. Starting game..."
       
       let mapToLoad = "client/assets/maps/pvp.json" 
@@ -82,99 +87,67 @@ main = withSocketsDo $ do
       
       case eMapData of
         Left err -> putStrLn $ "CLIENT FATAL: Không thể tải map: " ++ err
-        Right (clientMap, _spawnPoints) -> do -- Client không cần spawn points
+        Right (clientMap, _spawnPoints) -> do
           putStrLn "[Client] Map loaded."
 
           sock <- socket AF_INET Datagram defaultProtocol
           bind sock (SockAddrInet 0 0)
           addr <- head <$> getAddrInfo (Just defaultHints { addrSocketType = Datagram }) (Just "127.0.0.1") (Just "8888")
           
+          -- SỬA ĐỔI: Truyền 'assets' vào runGame
           runGame (addrAddress addr) sock assets clientMap
-
-loadSprite :: FilePath -> (Int, Int) -> (Int, Int) -> IO (Maybe Picture)
-loadSprite path (x, y) (w, h) = do
-  eImg <- readImage path
-  case eImg of
-    Left _ -> return Nothing
-    Right dynImg ->
-      let rgba = convertRGBA8 dynImg
-          cropped = generateImage (\i j -> pixelAt rgba (x + i) (y + j)) w h
-      in return $ fromDynamicImage (ImageRGBA8 cropped)
-
-loadResources :: IO (Either String GameAssets)
-loadResources = do
-  tileRes <- R.loadResources
-  mTankBody <- loadSprite "client/assets/textures/tanks/rapid_tank/body.png" (0, 0) (128, 128)
-  eTurretImg <- readImage "client/assets/textures/tanks/rapid_tank/turret.png" 
-  mBullet <- loadJuicyPNG "client/assets/textures/projectiles/bullet_normal.png"
-  eExplosionImg <- readImage "client/assets/textures/projectiles/explosion_spritesheet_blast.png"
   
-  case (mTankBody, eTurretImg, mBullet, eExplosionImg) of
-    (Just body, Right dynTurretImg, Just bullet, Right dynExplosionImg) ->
-      let
-        turretFrames = loadSpriteSheet dynTurretImg 128 128 8 
-        explosionFrames = loadSpriteSheet dynExplosionImg 256 256 8 
-      in
-        return $ Right $ GameAssets
-          { gaTankBody = body
-          , gaTurretFrames = turretFrames
-          , gaBullet = bullet
-          , gaExplosionFrames = explosionFrames
-          , gaTiles = R.resTiles tileRes
-          }
-    _ -> return $ Left "Failed to load one or more assets"
 
-runGame :: SockAddr -> Socket -> GameAssets -> GameMap -> IO ()
+runGame :: SockAddr -> Socket -> Resources -> GameMap -> IO ()
 runGame serverAddr sock assets clientMap = do
   let turretAnim = Animation
-        { animFrames = gaTurretFrames assets
+        { animFrames = resTurretFrames assets -- SỬA: dùng resTurretFrames
         , animFrameTime = 0.05
         , animTimer = 0
-        , animCurrentFrame = length (gaTurretFrames assets)
+        , animCurrentFrame = length (resTurretFrames assets) -- SỬA
         , animLoops = False
         }
 
-  let initialState = (initialClientState clientMap) { csTurretAnim = turretAnim }
+  let initialState = (initialClientState clientMap assets) { csTurretAnim = turretAnim }
   
   clientStateRef <- newMVar initialState
   
   putStrLn "[DEBUG] Sending initial handshake packet..."
   let initialCmd = encode (PlayerCommand (Vec2 0 0) 0.0 False)
   _ <- BS.sendTo sock (toStrict initialCmd) serverAddr
-  _ <- forkIO $ networkListenLoop sock assets clientStateRef
+  _ <- forkIO $ networkListenLoop sock clientStateRef
   playIO
     (InWindow "MMO Dungeon Crawler" (800, 600) (10, 10))
     black 60
     clientStateRef
-    (renderIO assets)
+    renderIO
     handleInputIO
     (updateClientIO serverAddr sock)
 
 -- SỬA ĐỔI: renderIO
-renderIO :: GameAssets -> MVar ClientState -> IO Picture
-renderIO assets mvar = do
+renderIO :: MVar ClientState -> IO Picture
+renderIO mvar = do
   cs <- readMVar mvar
   
-  -- Lấy map từ ClientState, KHÔNG phải từ WorldSnapshot
   let gameMap = csGameMap cs
   let snapshot = csWorld cs
+  let assets = csResources cs -- <-- Lấy assets từ state
   
-  -- Truyền cả hai vào render
   return $ render assets gameMap snapshot (csEffects cs) (csTurretAnim cs)
 
--- SỬA ĐỔI: networkListenLoop
-networkListenLoop :: Socket -> GameAssets -> MVar ClientState -> IO ()
-networkListenLoop sock assets stateRef = forever $ do
+-- SỬA ĐỔI: networkListenLoop (lấy assets từ MVar)
+networkListenLoop :: Socket -> MVar ClientState -> IO ()
+networkListenLoop sock stateRef = forever $ do
   (strictMsg, _) <- BS.recvFrom sock 8192
-  let lazyMsg = fromStrict strictMsg
-  case decodeOrFail lazyMsg of
+  -- ... (decodeOrFail) ...
+  case decodeOrFail (fromStrict strictMsg) of
     Left (_, _, err) -> do
       putStrLn $ "[DEBUG Network] Failed to decode: " ++ err
     Right (_, _, newSnapshot) -> do
-      -- (newSnapshot không còn map)
-      -- ... (log) ...
       modifyMVar_ stateRef (\cs ->
         let
+          -- Lấy assets từ state để tạo effect
+          assets = csResources cs
           oldWorld = csWorld cs
           oldBullets = wsBullets oldWorld
           newBulletIds = Set.fromList (map bsId (wsBullets newSnapshot))
@@ -184,11 +157,11 @@ networkListenLoop sock assets stateRef = forever $ do
             where
               makeEffect :: (Int, [Effect]) -> BulletState -> (Int, [Effect])
               makeEffect (nextId, effects) bullet =
-                let effect = makeExplosion nextId (gaExplosionFrames assets) (bsPosition bullet)
+                -- SỬA: dùng resExplosionFrames
+                let effect = makeExplosion nextId (resExplosionFrames assets) (bsPosition bullet)
                 in (nextId + 1, effect : effects)
           
         in
-          -- SỬA ĐỔI: Chỉ cập nhật csWorld, KHÔNG chạm vào csGameMap
           pure cs { csWorld = newSnapshot, csEffects = csEffects cs ++ newEffects, csNextEffectId = newNextId }
         )
 
