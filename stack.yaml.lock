@@ -11,6 +11,20 @@ packages:
       size: 273
   original:
     hackage: gloss-juicy-0.2.3@sha256:0c3bca95237cbf91f8b3b1936a0661f1e0457acd80502276d54d6c5210f88b25,1618
+- completed:
+    hackage: derive-storable-plugin-0.2.3.7@sha256:f82b5cc67d7affbb41040d3a5812e6a587894e232e7a5d5ccb33103836e51fa6,2868
+    pantry-tree:
+      sha256: b11fd39df181394cc3cb37d4cc43149ef776ab2c079413c84ad59f3904ff557f
+      size: 1411
+  original:
+    hackage: derive-storable-plugin-0.2.3.7@sha256:f82b5cc67d7affbb41040d3a5812e6a587894e232e7a5d5ccb33103836e51fa6,2868
+- completed:
+    hackage: gloss-raster-massiv-0.1.1.5@sha256:beb83234e5f39bacb62fd27f517e5af7acc9437a0d27c08b5787a0575efbbca3,4073
+    pantry-tree:
+      sha256: b932296ce78ce418ab3f75e2947c8c03422afe4afb73d550765d4b528aea731d
+      size: 457
+  original:
+    hackage: gloss-raster-massiv-0.1.1.5@sha256:beb83234e5f39bacb62fd27f517e5af7acc9437a0d27c08b5787a0575efbbca3,4073
 snapshots:
 - completed:
     sha256: 7b975b104cb3dbf0c297dfd01f936a4d2ee523241dd0b1ae960522b833fe3027

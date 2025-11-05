@@ -29,6 +29,7 @@ udpListenLoop sock gameStateRef = forever $ do
       case decodeOrFail lazyMsg of
         Left _ -> pure ()
         Right (_, _, command) -> do
+          putStrLn $ "[UDP] Received command from " ++ show addr ++ ": " ++ show (command :: PlayerCommand)
           modifyMVar_ gameStateRef $ \gs -> do
             -- Kiểm tra xem player đã tồn tại chưa
             let (newPlayers, newCommand) =

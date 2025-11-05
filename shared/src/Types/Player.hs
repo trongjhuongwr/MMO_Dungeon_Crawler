@@ -10,7 +10,8 @@ import Types.Common (Vec2)
 data PlayerState = PlayerState
   { psPosition    :: Vec2    -- Vị trí hiện tại
   , psBodyAngle   :: Float   -- Góc xoay của thân xe (radians)
-  , psTurretAngle :: Float   -- Góc xoay của nòng súng (radians)
+  , psTurretAngle :: Float  
+  , psHealth      :: Int
   } deriving (Show, Generic)
 
 instance Binary PlayerState

@@ -16,6 +16,7 @@ dependencies:
   - network    # Thư viện cho lập trình socket
   - binary     # Để mã hóa/giải mã gói tin
   - containers
+  - array      # Cho GameMap
   # Đây là phần quan trọng nhất: liên kết đến gói 'shared'
   - shared
   - JuicyPixels
@@ -26,9 +27,7 @@ library:
 
 # Phần ứng dụng chạy được (entry point)
 executables:
-  # Tên của file thực thi sau khi build
   mmo-server:
-    # Tệp chính để bắt đầu chạy chương trình
     main:                Main.hs
     # Thư mục chứa tệp Main.hs
     source-dirs:         app

@@ -47,7 +47,7 @@ data TileType
   -- === Doors / Exits ===
   | Door_Entrance_Left | Door_Exit_Right
   
-  deriving (Eq, Show, Enum, Bounded, Generic)
+  deriving (Eq, Show, Enum, Bounded, Ord, Generic)
 
 instance NFData TileType
 instance Serialize TileType

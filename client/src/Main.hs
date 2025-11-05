@@ -1,6 +1,7 @@
 module Main where
 
 import Network.Socket
+import System.IO (hSetEncoding, stdout, stderr, utf8)
 import Data.Binary (encode, decodeOrFail)
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar
@@ -19,12 +20,16 @@ import Types.Player
 import Types.Common
 import Types.Bullet (BulletState(..))
 import Types.Enemy (EnemyState(..))
+import Types.Map (GameMap(..), TileType(..))
+import qualified Data.Array as Array
 import Network.Packet
 import Input (KeyMap, calculateMoveVector)
 import Core.Renderer (render, GameAssets(..), loadSpriteSheet)
+import qualified Renderer.Resources as R
 import Core.Effect (Effect(..), makeExplosion, updateEffect, isEffectFinished)
 import Core.Animation (Animation(..), updateAnimation, startAnimation)
 
+import qualified Data.Map as Map
 import Codec.Picture (readImage, DynamicImage(..), convertRGBA8, pixelAt, generateImage)
 
 data ClientState = ClientState
@@ -38,7 +43,16 @@ data ClientState = ClientState
   }
 
 initialWorldSnapshot :: WorldSnapshot
-initialWorldSnapshot = WorldSnapshot { wsPlayers = [], wsEnemies = [], wsBullets = [] }
+initialWorldSnapshot = WorldSnapshot
+  { wsPlayers = []
+  , wsEnemies = []
+  , wsBullets = []
+  , wsMap = GameMap
+      { gmapWidth = 1
+      , gmapHeight = 1
+      , gmapTiles = Array.array ((0,0),(0,0)) [((0,0), Empty)]
+      }
+  }
 
 dummyAnim :: Animation
 dummyAnim = Animation [] 0 0 0 False
@@ -56,6 +70,9 @@ initialClientState = ClientState
 
 main :: IO ()
 main = withSocketsDo $ do
+  -- Ensure console can print UTF-8 (Vietnamese) characters on Windows
+  hSetEncoding stdout utf8
+  hSetEncoding stderr utf8
   putStrLn "Starting client..."
   eResources <- loadResources
   case eResources of
@@ -63,6 +80,8 @@ main = withSocketsDo $ do
     Right assets -> do
       putStrLn "Assets loaded successfully. Starting game..."
       sock <- socket AF_INET Datagram defaultProtocol
+      -- Bind the client socket to an ephemeral local port so we can receive replies
+      bind sock (SockAddrInet 0 0)
       addr <- head <$> getAddrInfo (Just defaultHints { addrSocketType = Datagram }) (Just "127.0.0.1") (Just "8888")
       runGame (addrAddress addr) sock assets
 
@@ -78,11 +97,14 @@ loadSprite path (x, y) (w, h) = do
 
 loadResources :: IO (Either String GameAssets)
 loadResources = do
+  -- Load tile resources (paths -> Pictures)
+  tileRes <- R.loadResources
+
   mTankBody <- loadSprite "client/assets/textures/tanks/rapid_tank/body.png" (0, 0) (128, 128)
   eTurretImg <- readImage "client/assets/textures/tanks/rapid_tank/turret.png" 
   mBullet <- loadJuicyPNG "client/assets/textures/projectiles/bullet_normal.png"
   eExplosionImg <- readImage "client/assets/textures/projectiles/explosion_spritesheet_blast.png"
-
+  
   case (mTankBody, eTurretImg, mBullet, eExplosionImg) of
     (Just body, Right dynTurretImg, Just bullet, Right dynExplosionImg) ->
       let
@@ -94,6 +116,7 @@ loadResources = do
           , gaTurretFrames = turretFrames
           , gaBullet = bullet
           , gaExplosionFrames = explosionFrames
+          , gaTiles = R.resTiles tileRes
           }
     _ -> return $ Left "Failed to load one or more assets"
 
@@ -142,6 +165,7 @@ networkListenLoop sock assets stateRef = forever $ do
     Left (_, _, err) -> do
       putStrLn $ "[DEBUG Network] Failed to decode: " ++ err
     Right (_, _, newSnapshot) -> do
+      putStrLn $ "[Client] Received snapshot: players=" ++ show (length $ wsPlayers newSnapshot) ++ ", enemies=" ++ show (length $ wsEnemies newSnapshot) ++ ", bullets=" ++ show (length $ wsBullets newSnapshot)
       modifyMVar_ stateRef (\cs ->
         let
           oldWorld = csWorld cs

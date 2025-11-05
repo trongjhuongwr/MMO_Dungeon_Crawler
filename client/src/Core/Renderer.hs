@@ -1,24 +1,35 @@
 module Core.Renderer (render, GameAssets(..), loadSpriteSheet) where
 
 import Graphics.Gloss
+import Graphics.Gloss.Juicy (loadJuicyPNG)
 import Network.Packet (WorldSnapshot(..))
 import Types.Player (PlayerState(..))
 import Types.Common (Vec2(..))
 import Types.Bullet (BulletState(..))
 import Types.Enemy (EnemyState(..))
+import Types.Map (GameMap(..), TileType(..)) -- THÊM MỚI
 import Core.Effect (Effect(..))
 import Core.Animation (Animation, getCurrentFrame) 
 import Codec.Picture (generateImage, pixelAt, convertRGBA8, DynamicImage(ImageRGBA8))
 import Graphics.Gloss.Juicy (fromDynamicImage)
 import Data.Maybe (mapMaybe)
+import qualified Data.Map as Map -- THÊM MỚI
+import qualified Data.Array as Array -- THÊM MỚI
+import UI.HUD (renderHUD) -- THÊM MỚI
 
 data GameAssets = GameAssets
   { gaTankBody        :: Picture
   , gaTurretFrames    :: [Picture]
   , gaBullet          :: Picture
   , gaExplosionFrames :: [Picture]
+  , gaTiles           :: Map.Map TileType Picture -- THÊM MỚI
   }
 
+-- Kích thước tile (PHẢI KHỚP VỚI SERVER)
+tileSize :: Float
+tileSize = 32.0
+
+-- (loadSpriteSheet không đổi)
 loadSpriteSheet :: DynamicImage -> Int -> Int -> Int -> [Picture]
 loadSpriteSheet dynImg frameWidth frameHeight frameCount =
   let
@@ -35,6 +46,78 @@ loadSpriteSheet dynImg frameWidth frameHeight frameCount =
   in
     mapMaybe cropFrame frames
 
+loadTile :: FilePath -> IO Picture
+loadTile path = do
+  mPic <- loadJuicyPNG path
+  case mPic of
+    Just pic -> return pic
+    Nothing  -> do
+      putStrLn $ "Warning: Failed to load tile: " ++ path
+      return Blank
+
+loadTiles :: IO (Map.Map TileType Picture)
+loadTiles = do
+  -- Sàn
+  f01 <- loadTile "client/assets/textures/map/floors/floor_01.png"
+  
+  -- Tường
+  wBack00 <- loadTile "client/assets/textures/map/walls/wall_back_00.png"
+  
+  -- Cửa
+  dEntrance <- loadTile "client/assets/textures/map/items/door_left.png"
+  
+  return $ Map.fromList
+    [ (Floor_01, f01)
+    
+    -- Thêm các loại sàn khác nếu dùng
+    , (Floor_00, f01), (Floor_02, f01), (Floor_03, f01)
+    , (Floor_04, f01), (Floor_05, f01), (Floor_06, f01)
+    , (Floor_07, f01), (Floor_08, f01), (Floor_09, f01)
+    , (Floor_10, f01), (Floor_11, f01)
+    
+    -- Tường
+    , (Wall_Back_00, wBack00)
+    , (Wall_Back_01, wBack00) -- Dùng tạm
+    , (Wall_Front_00, wBack00), (Wall_Front_01, wBack00), (Wall_Front_02, wBack00)
+    , (Wall_Left_00, wBack00), (Wall_Left_01, wBack00), (Wall_Left_02, wBack00), (Wall_Left_03, wBack00)
+    , (Wall_Left_End, wBack00), (Wall_Left_Start, wBack00)
+    , (Wall_Right_00, wBack00), (Wall_Right_01, wBack00), (Wall_Right_02, wBack00)
+    , (Wall_Right_End, wBack00), (Wall_Right_Start, wBack00)
+    
+    -- Cửa
+    , (Door_Entrance_Left, dEntrance)
+    , (Door_Exit_Right, dEntrance) -- Dùng tạm
+    
+    -- Gán tile 'Empty' cho tường để đảm bảo va chạm
+    , (Empty, wBack00)
+    ]
+
+-- THÊM MỚI: Hàm vẽ map
+drawMap :: GameAssets -> GameMap -> Picture
+drawMap assets gmap =
+  let
+    tiles = gmapTiles gmap
+    ((yMin, xMin), (yMax, xMax)) = Array.bounds tiles
+    
+    -- Lấy danh sách (chỉ số, loại tile)
+    tileList = Array.assocs tiles
+    
+    -- Chuyển đổi (y, x) grid -> (x, y) world coords
+    drawTile ((gy, gx), tileType) =
+      let
+        wx = (fromIntegral gx) * tileSize
+        wy = (fromIntegral gy) * tileSize
+        
+        -- Lấy ảnh từ assets, nếu không có thì dùng ảnh trống
+        tilePic = Map.findWithDefault Blank tileType (gaTiles assets)
+      in
+        -- Dịch chuyển đến đúng tọa độ thế giới
+        Translate wx wy (Scale 2 2 tilePic)
+        
+  in
+    Pictures (map drawTile tileList)
+
+-- HÀM RENDER CHÍNH (ĐÃ CẬP NHẬT)
 render :: GameAssets -> WorldSnapshot -> [Effect] -> Animation -> Picture
 render assets snapshot effects turretAnim =
   let
@@ -42,18 +125,43 @@ render assets snapshot effects turretAnim =
                                   (p:ps) -> (Just p, ps)
                                   []     -> (Nothing, [])
     
+    mapPic = drawMap assets (wsMap snapshot)
+    
+    hudPic = case ourPlayer of
+               Just p  -> renderHUD p
+               Nothing -> Blank
+               
     ourPlayerPic = case ourPlayer of
                      Just p  -> [drawOurPlayer assets p turretAnim]
                      Nothing -> []
     
     otherPlayerPics = map (drawOtherPlayer assets) otherPlayers
-  in
-    Pictures $
+    
+    -- Tọa độ camera (theo người chơi)
+    (camX, camY) = case ourPlayer of
+                     Just p  -> (vecX $ psPosition p, vecY $ psPosition p)
+                     Nothing -> (0, 0)
+                     
+    -- Toàn bộ thế giới game (map, entities)
+    worldPics = Pictures $
+      [ mapPic ] ++
       ourPlayerPic ++ otherPlayerPics ++
       map drawEnemy (wsEnemies snapshot) ++
       map (drawBullet assets) (wsBullets snapshot) ++
       map (drawEffect assets) effects
+      
+  in
+    Pictures
+      [ -- Dịch chuyển toàn bộ thế giới ngược với camera
+        -- và phóng to (Scale) nếu muốn
+        Translate (-camX) (-camY) worldPics
+        
+        -- Vẽ HUD (không bị ảnh hưởng bởi camera)
+      , hudPic 
+      ]
 
+-- (drawOurPlayer, drawOtherPlayer, drawBullet, drawEnemy, drawEffect, radToDeg không đổi)
+-- ...
 drawOurPlayer :: GameAssets -> PlayerState -> Animation -> Picture
 drawOurPlayer assets ps anim =
   let
