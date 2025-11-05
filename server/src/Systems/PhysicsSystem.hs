@@ -9,6 +9,7 @@ import Types.Map (GameMap(..), isSolid)
 import Network.Socket (SockAddr)
 import qualified Data.Map as Map
 import qualified Data.Array as Array
+import Data.List (nub) 
 
 playerSpeed :: Float
 playerSpeed = 100.0
@@ -25,53 +26,78 @@ worldToGrid (Vec2 x y) =
   , floor (x / tileSize)
   )
 
-isPositionSolid :: GameMap -> Vec2 -> Bool
-isPositionSolid gmap pos =
+-- ĐỔI TÊN HÀM (và giữ nguyên): Kiểm tra 1 ô tile CỤ THỂ
+isTileSolidAtGrid :: GameMap -> (Int, Int) -> Bool
+isTileSolidAtGrid gmap (gy, gx) =
   let
-    (gy, gx) = worldToGrid pos
     (yMin, xMin) = fst (Array.bounds (gmapTiles gmap))
     (yMax, xMax) = snd (Array.bounds (gmapTiles gmap))
     
-    -- Kiểm tra xem có ngoài biên map không
     isOutOfBounds = gy < yMin || gy > yMax || gx < xMin || gx > xMax
   in
     if isOutOfBounds
-      then True -- Ngoài biên coi như là tường
+      then True 
       else
         let tile = (gmapTiles gmap) Array.! (gy, gx)
         in isSolid tile
 
--- | Cập nhật vật lý cho TẤT CẢ người chơi dựa trên lệnh
+-- HÀM CŨ (isPositionSolid): Giữ nguyên để check đạn (va chạm 1 điểm)
+isPositionSolid :: GameMap -> Vec2 -> Bool
+isPositionSolid gmap pos = isTileSolidAtGrid gmap (worldToGrid pos)
+
+-- HÀM MỚI: Định nghĩa bán kính hitbox (32x32)
+playerRadius :: Float
+playerRadius = 16.0 -- (1/2 tileSize, vì tâm ở giữa)
+
+-- HÀM MỚI: Kiểm tra va chạm Bounding Box
+isPositionColliding :: GameMap -> Vec2 -> Bool
+isPositionColliding gmap pos =
+  let
+    (Vec2 x y) = pos
+    r = playerRadius
+    
+    -- Lấy 4 điểm ở 4 góc của bounding box
+    posTopLeft  = Vec2 (x - r) (y + r)
+    posTopRight = Vec2 (x + r) (y + r)
+    posBotLeft  = Vec2 (x - r) (y - r)
+    posBotRight = Vec2 (x + r) (y - r)
+
+    -- Chuyển 4 điểm thành các ô grid (dùng nub để loại bỏ trùng lặp)
+    gridCoords = nub 
+      [ worldToGrid posTopLeft
+      , worldToGrid posTopRight
+      , worldToGrid posBotLeft
+      , worldToGrid posBotRight
+      ]
+      
+  in
+    -- Nếu BẤT KỲ ô nào trong các ô đó là solid, thì có va chạm
+    any (isTileSolidAtGrid gmap) gridCoords
+
+-- ... (updatePlayerPhysics, applyCommand, updatePlayerState không đổi) ...
 updatePlayerPhysics :: Float -> GameState -> GameState
 updatePlayerPhysics dt gs =
   let
-    gameMap = gsMap gs -- Lấy map
+    gameMap = gsMap gs 
     cmdMap = Map.fromListWith (\new _ -> new) [(addr, cmd) | (Command addr cmd) <- gsCommands gs]
-    
-    -- Cập nhật từng player trong state
     updatedPlayers = Map.mapWithKey (applyCommand dt gameMap) (gsPlayers gs)
     
-    -- Hàm áp dụng lệnh (GIỜ CÓ THÊM gameMap)
     applyCommand :: Float -> GameMap -> SockAddr -> PlayerState -> PlayerState
     applyCommand dt gmap addr ps =
       case Map.lookup addr cmdMap of
-        Nothing -> ps -- Không có lệnh, giữ nguyên
+        Nothing -> ps
         Just (PlayerCommand moveVec angle _) -> updatePlayerState dt gmap ps moveVec angle
   in
     gs { gsPlayers = updatedPlayers }
 
--- | Cập nhật trạng thái của một người chơi
 updatePlayerState :: Float -> GameMap -> PlayerState -> Vec2 -> Float -> PlayerState
 updatePlayerState dt gmap ps moveVec angle =
   let
-    -- Cập nhật di chuyển và va chạm
     movedPlayer = updatePlayerMovement dt gmap ps moveVec
   in
-    -- Cập nhật góc nòng súng
     movedPlayer { psTurretAngle = angle }
 
-
-
+-- SỬA ĐỔI: updatePlayerMovement
 updatePlayerMovement :: Float -> GameMap -> PlayerState -> Vec2 -> PlayerState
 updatePlayerMovement dt gmap ps moveVec =
   let
@@ -84,18 +110,16 @@ updatePlayerMovement dt gmap ps moveVec =
     forwardVec = Vec2 (sin newBodyAngle) (cos newBodyAngle)
     effectiveSpeed = if throttle < 0 then playerSpeed * (1.0/3.0) else playerSpeed
     
-    -- Tính toán vị trí mới
     newPos = psPosition ps + (forwardVec *^ (throttle * effectiveSpeed * dt))
     
-    -- KIỂM TRA VA CHẠM
-    finalPos = if isPositionSolid gmap newPos
-                 then psPosition ps -- Nếu vị trí mới bị chặn, giữ nguyên vị trí cũ
-                 else newPos        -- Nếu không, di chuyển
+    -- SỬA ĐỔI VA CHẠM:
+    finalPos = if isPositionColliding gmap newPos
+                 then psPosition ps -- Nếu va chạm, giữ vị trí cũ
+                 else newPos        -- Nếu không, cập nhật
                  
   in ps { psPosition = finalPos, psBodyAngle = newBodyAngle }
 
-
--- | HÀM MỚI: Cập nhật vật lý cho đạn
+-- ... (updateBulletPhysics, moveBullet không đổi) ...
 updateBulletPhysics :: Float -> GameState -> GameState
 updateBulletPhysics dt gs =
   let
@@ -109,13 +133,13 @@ moveBullet dt b = b
   , bsLifetime = bsLifetime b - dt
   }
 
+-- SỬA ĐỔI: filterDeadEntities (để đảm bảo nó dùng va chạm 1 điểm cho đạn)
 filterDeadEntities :: GameState -> GameState
 filterDeadEntities gs =
   let
     gameMap = gsMap gs
-    -- Lọc đạn: hết giờ HOẶC va chạm tường
+    -- Lọc đạn: hết giờ HOẶC va chạm tường (dùng isPositionSolid 1 điểm)
     aliveBullets = filter (\b -> bsLifetime b > 0 && not (isPositionSolid gameMap (bsPosition b))) (gsBullets gs)
     aliveEnemies = filter ((> 0) . esHealth) (gsEnemies gs)
-    -- (Sau này thêm lọc người chơi chết)
   in
     gs { gsBullets = aliveBullets, gsEnemies = aliveEnemies }

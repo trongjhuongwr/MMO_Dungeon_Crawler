@@ -13,6 +13,7 @@ import qualified Data.ByteString.Lazy as LBS
 import Data.ByteString.Lazy.Internal (fromStrict)
 
 import Core.Types (Command(..), GameState(..), initialPlayerState)
+import Types.Common (Vec2(..))
 import Types.Player (PlayerCommand(..))
 import qualified Data.Map as Map
 
@@ -29,15 +30,25 @@ udpListenLoop sock gameStateRef = forever $ do
       case decodeOrFail lazyMsg of
         Left _ -> pure ()
         Right (_, _, command) -> do
-          putStrLn $ "[UDP] Received command from " ++ show addr ++ ": " ++ show (command :: PlayerCommand)
+          -- ... (log) ...
           modifyMVar_ gameStateRef $ \gs -> do
-            -- Kiểm tra xem player đã tồn tại chưa
+            -- SỬA ĐỔI: Logic gán spawn point
             let (newPlayers, newCommand) =
                   if Map.member addr (gsPlayers gs)
                     then (gsPlayers gs, Command addr (command :: PlayerCommand))
-                    else -- Nếu chưa, tạo player mới
-                      let newPlayer = initialPlayerState
-                      in (Map.insert addr newPlayer (gsPlayers gs), Command addr command)
+                    else -- Nếu chưa, tạo player mới VÀ GÁN VỊ TRÍ SPAWN
+                      let
+                        playerCount = Map.size (gsPlayers gs)
+                        spawnPoints = gsSpawns gs
+                        
+                        -- Chọn điểm spawn (quay vòng nếu hết)
+                        spawnPos = if null spawnPoints
+                                     then Vec2 0 0 -- Fallback
+                                     else spawnPoints !! (playerCount `mod` length spawnPoints)
+
+                        newPlayer = initialPlayerState spawnPos -- Gán spawnPos
+                      in
+                        (Map.insert addr newPlayer (gsPlayers gs), Command addr command)
             
             let newCommands = newCommand : gsCommands gs
             pure gs { gsCommands = newCommands, gsPlayers = newPlayers }

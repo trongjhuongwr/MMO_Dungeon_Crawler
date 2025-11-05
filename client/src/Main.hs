@@ -5,7 +5,7 @@ import System.IO (hSetEncoding, stdout, stderr, utf8)
 import Data.Binary (encode, decodeOrFail)
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar
-import Control.Monad (forever, when)
+import Control.Monad (forever, when) -- <-- THÊM 'when'
 import Graphics.Gloss.Interface.IO.Game
 import Graphics.Gloss.Juicy (fromDynamicImage, loadJuicyPNG)
 import qualified Data.Set as Set
@@ -20,7 +20,7 @@ import Types.Player
 import Types.Common
 import Types.Bullet (BulletState(..))
 import Types.Enemy (EnemyState(..))
-import Types.Map (GameMap(..), TileType(..))
+import Types.Map (GameMap(..), TileType(..)) -- <-- THÊM
 import qualified Data.Array as Array
 import Network.Packet
 import Input (KeyMap, calculateMoveVector)
@@ -32,10 +32,13 @@ import Core.Animation (Animation(..), updateAnimation, startAnimation)
 import qualified Data.Map as Map
 import Codec.Picture (readImage, DynamicImage(..), convertRGBA8, pixelAt, generateImage)
 
+import Systems.MapLoader (loadMapFromFile) 
+
 data ClientState = ClientState
   { csKeys         :: KeyMap
   , csMousePos     :: (Float, Float)
   , csWorld        :: WorldSnapshot
+  , csGameMap      :: GameMap -- <-- THÊM: Client tự giữ map
   , csDidFire      :: Bool
   , csEffects      :: [Effect]
   , csNextEffectId :: Int
@@ -47,21 +50,17 @@ initialWorldSnapshot = WorldSnapshot
   { wsPlayers = []
   , wsEnemies = []
   , wsBullets = []
-  , wsMap = GameMap
-      { gmapWidth = 1
-      , gmapHeight = 1
-      , gmapTiles = Array.array ((0,0),(0,0)) [((0,0), Empty)]
-      }
   }
 
 dummyAnim :: Animation
 dummyAnim = Animation [] 0 0 0 False
 
-initialClientState :: ClientState
-initialClientState = ClientState
+initialClientState :: GameMap -> ClientState
+initialClientState gmap = ClientState
   { csKeys = Set.empty
   , csMousePos = (0, 0)
   , csWorld = initialWorldSnapshot
+  , csGameMap = gmap 
   , csDidFire = False
   , csEffects = []
   , csNextEffectId = 0
@@ -70,20 +69,27 @@ initialClientState = ClientState
 
 main :: IO ()
 main = withSocketsDo $ do
-  -- Ensure console can print UTF-8 (Vietnamese) characters on Windows
-  hSetEncoding stdout utf8
-  hSetEncoding stderr utf8
   putStrLn "Starting client..."
   eResources <- loadResources
   case eResources of
     Left err -> putStrLn $ "Failed to load resources: " ++ err
     Right assets -> do
       putStrLn "Assets loaded successfully. Starting game..."
-      sock <- socket AF_INET Datagram defaultProtocol
-      -- Bind the client socket to an ephemeral local port so we can receive replies
-      bind sock (SockAddrInet 0 0)
-      addr <- head <$> getAddrInfo (Just defaultHints { addrSocketType = Datagram }) (Just "127.0.0.1") (Just "8888")
-      runGame (addrAddress addr) sock assets
+      
+      let mapToLoad = "client/assets/maps/dungeon_level_1.json" 
+      putStrLn $ "[Client] Loading map: " ++ mapToLoad
+      eMapData <- loadMapFromFile mapToLoad
+      
+      case eMapData of
+        Left err -> putStrLn $ "CLIENT FATAL: Không thể tải map: " ++ err
+        Right (clientMap, _spawnPoints) -> do -- Client không cần spawn points
+          putStrLn "[Client] Map loaded."
+
+          sock <- socket AF_INET Datagram defaultProtocol
+          bind sock (SockAddrInet 0 0)
+          addr <- head <$> getAddrInfo (Just defaultHints { addrSocketType = Datagram }) (Just "127.0.0.1") (Just "8888")
+          
+          runGame (addrAddress addr) sock assets clientMap
 
 loadSprite :: FilePath -> (Int, Int) -> (Int, Int) -> IO (Maybe Picture)
 loadSprite path (x, y) (w, h) = do
@@ -97,9 +103,7 @@ loadSprite path (x, y) (w, h) = do
 
 loadResources :: IO (Either String GameAssets)
 loadResources = do
-  -- Load tile resources (paths -> Pictures)
   tileRes <- R.loadResources
-
   mTankBody <- loadSprite "client/assets/textures/tanks/rapid_tank/body.png" (0, 0) (128, 128)
   eTurretImg <- readImage "client/assets/textures/tanks/rapid_tank/turret.png" 
   mBullet <- loadJuicyPNG "client/assets/textures/projectiles/bullet_normal.png"
@@ -120,8 +124,8 @@ loadResources = do
           }
     _ -> return $ Left "Failed to load one or more assets"
 
-runGame :: SockAddr -> Socket -> GameAssets -> IO ()
-runGame serverAddr sock assets = do
+runGame :: SockAddr -> Socket -> GameAssets -> GameMap -> IO ()
+runGame serverAddr sock assets clientMap = do
   let turretAnim = Animation
         { animFrames = gaTurretFrames assets
         , animFrameTime = 0.05
@@ -129,34 +133,36 @@ runGame serverAddr sock assets = do
         , animCurrentFrame = length (gaTurretFrames assets)
         , animLoops = False
         }
-  let initialState = initialClientState { csTurretAnim = turretAnim }
+
+  let initialState = (initialClientState clientMap) { csTurretAnim = turretAnim }
   
   clientStateRef <- newMVar initialState
   
   putStrLn "[DEBUG] Sending initial handshake packet..."
   let initialCmd = encode (PlayerCommand (Vec2 0 0) 0.0 False)
   _ <- BS.sendTo sock (toStrict initialCmd) serverAddr
-  
   _ <- forkIO $ networkListenLoop sock assets clientStateRef
-  
   playIO
     (InWindow "MMO Dungeon Crawler" (800, 600) (10, 10))
-    black
-    60
+    black 60
     clientStateRef
     (renderIO assets)
     handleInputIO
     (updateClientIO serverAddr sock)
 
+-- SỬA ĐỔI: renderIO
 renderIO :: GameAssets -> MVar ClientState -> IO Picture
 renderIO assets mvar = do
   cs <- readMVar mvar
-  -- Log debug
-  -- let effectCount = length (csEffects cs)
-  -- when (effectCount > 0) $
-  --   putStrLn $ "[DEBUG Render] Rendering " ++ show effectCount ++ " effects."
-  return $ render assets (csWorld cs) (csEffects cs) (csTurretAnim cs)
+  
+  -- Lấy map từ ClientState, KHÔNG phải từ WorldSnapshot
+  let gameMap = csGameMap cs
+  let snapshot = csWorld cs
+  
+  -- Truyền cả hai vào render
+  return $ render assets gameMap snapshot (csEffects cs) (csTurretAnim cs)
 
+-- SỬA ĐỔI: networkListenLoop
 networkListenLoop :: Socket -> GameAssets -> MVar ClientState -> IO ()
 networkListenLoop sock assets stateRef = forever $ do
   (strictMsg, _) <- BS.recvFrom sock 8192
@@ -165,7 +171,8 @@ networkListenLoop sock assets stateRef = forever $ do
     Left (_, _, err) -> do
       putStrLn $ "[DEBUG Network] Failed to decode: " ++ err
     Right (_, _, newSnapshot) -> do
-      putStrLn $ "[Client] Received snapshot: players=" ++ show (length $ wsPlayers newSnapshot) ++ ", enemies=" ++ show (length $ wsEnemies newSnapshot) ++ ", bullets=" ++ show (length $ wsBullets newSnapshot)
+      -- (newSnapshot không còn map)
+      -- ... (log) ...
       modifyMVar_ stateRef (\cs ->
         let
           oldWorld = csWorld cs
@@ -180,11 +187,8 @@ networkListenLoop sock assets stateRef = forever $ do
                 let effect = makeExplosion nextId (gaExplosionFrames assets) (bsPosition bullet)
                 in (nextId + 1, effect : effects)
           
-          -- Log debug
-          -- _ = when (not (null newEffects)) $
-          --       putStrLn $ "[DEBUG Network] Created " ++ show (length newEffects) ++ " new effects."
-          
         in
+          -- SỬA ĐỔI: Chỉ cập nhật csWorld, KHÔNG chạm vào csGameMap
           pure cs { csWorld = newSnapshot, csEffects = csEffects cs ++ newEffects, csNextEffectId = newNextId }
         )
 
@@ -224,33 +228,19 @@ sendPlayerCommand serverAddr sock cs = do
   _ <- BS.sendTo sock strictMsg serverAddr
   return ()
 
--- | HÀM THUẦN TÚY (ĐÃ SỬA LỖI BUILD)
 updateClient :: Float -> ClientState -> ClientState
 updateClient dt cs =
   let
-    -- Cập nhật hiệu ứng nổ
     updatedEffects = map (updateEffect dt) (csEffects cs)
-    -- <<< SỬA LỖI: Dùng 'isEffectFinished'
     activeEffects = filter (not . isEffectFinished) updatedEffects
-    
-    -- Cập nhật animation nòng súng
     newTurretAnim = updateAnimation dt (csTurretAnim cs)
   in
     cs { csEffects = activeEffects, csDidFire = False, csTurretAnim = newTurretAnim }
 
--- | HÀM IO (SỬA hlint)
 updateClientIO :: SockAddr -> Socket -> Float -> MVar ClientState -> IO (MVar ClientState)
 updateClientIO serverAddr sock dt mvar = do
   cs <- readMVar mvar
   sendPlayerCommand serverAddr sock cs
   let cs' = updateClient dt cs
-  
-  -- Dọn dẹp log debug
-  -- let oldEffectCount = length (csEffects cs)
-  -- let newEffectCount = length (csEffects cs')
-  -- when (oldEffectCount > 0) $
-  --   putStrLn $ "[DEBUG Update] Updating effects: " ++ show oldEffectCount ++ " -> " ++ show newEffectCount
-  
   _ <- swapMVar mvar cs' 
-  
   return mvar

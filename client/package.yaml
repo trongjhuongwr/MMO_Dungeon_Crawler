@@ -21,6 +21,7 @@ dependencies:
   - JuicyPixels
   - containers
   - array
+  - aeson
 
 # Thêm dependency định nghĩa cho test suite
   - hspec

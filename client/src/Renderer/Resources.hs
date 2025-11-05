@@ -64,9 +64,6 @@ tileTypeToPath tt = case tt of
   Wall_Right_End -> Just "client/assets/textures/map/walls/wall_right_end.png"
   Wall_Right_Start -> Just "client/assets/textures/map/walls/wall_right_start.png"
 
-  Door_Entrance_Left -> Just "client/assets/textures/map/items/door_left.png"
-  Door_Exit_Right -> Just "client/assets/textures/map/items/door_right.png"
-
   -- Empty tiles don't have an image
   Empty -> Nothing
 

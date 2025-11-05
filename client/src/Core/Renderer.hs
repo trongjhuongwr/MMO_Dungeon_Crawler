@@ -29,7 +29,6 @@ data GameAssets = GameAssets
 tileSize :: Float
 tileSize = 32.0
 
--- (loadSpriteSheet không đổi)
 loadSpriteSheet :: DynamicImage -> Int -> Int -> Int -> [Picture]
 loadSpriteSheet dynImg frameWidth frameHeight frameCount =
   let
@@ -84,10 +83,6 @@ loadTiles = do
     , (Wall_Right_00, wBack00), (Wall_Right_01, wBack00), (Wall_Right_02, wBack00)
     , (Wall_Right_End, wBack00), (Wall_Right_Start, wBack00)
     
-    -- Cửa
-    , (Door_Entrance_Left, dEntrance)
-    , (Door_Exit_Right, dEntrance) -- Dùng tạm
-    
     -- Gán tile 'Empty' cho tường để đảm bảo va chạm
     , (Empty, wBack00)
     ]
@@ -117,15 +112,15 @@ drawMap assets gmap =
   in
     Pictures (map drawTile tileList)
 
--- HÀM RENDER CHÍNH (ĐÃ CẬP NHẬT)
-render :: GameAssets -> WorldSnapshot -> [Effect] -> Animation -> Picture
-render assets snapshot effects turretAnim =
+render :: GameAssets -> GameMap -> WorldSnapshot -> [Effect] -> Animation -> Picture
+render assets gameMap snapshot effects turretAnim =
   let
     (ourPlayer, otherPlayers) = case wsPlayers snapshot of
                                   (p:ps) -> (Just p, ps)
                                   []     -> (Nothing, [])
     
-    mapPic = drawMap assets (wsMap snapshot)
+    -- SỬA ĐỔI: mapPic dùng gameMap, KHÔNG phải snapshot
+    mapPic = drawMap assets gameMap
     
     hudPic = case ourPlayer of
                Just p  -> renderHUD p
@@ -137,12 +132,10 @@ render assets snapshot effects turretAnim =
     
     otherPlayerPics = map (drawOtherPlayer assets) otherPlayers
     
-    -- Tọa độ camera (theo người chơi)
     (camX, camY) = case ourPlayer of
                      Just p  -> (vecX $ psPosition p, vecY $ psPosition p)
                      Nothing -> (0, 0)
                      
-    -- Toàn bộ thế giới game (map, entities)
     worldPics = Pictures $
       [ mapPic ] ++
       ourPlayerPic ++ otherPlayerPics ++
@@ -152,28 +145,28 @@ render assets snapshot effects turretAnim =
       
   in
     Pictures
-      [ -- Dịch chuyển toàn bộ thế giới ngược với camera
-        -- và phóng to (Scale) nếu muốn
-        Translate (-camX) (-camY) worldPics
-        
-        -- Vẽ HUD (không bị ảnh hưởng bởi camera)
+      [ Translate (-camX) (-camY) worldPics
       , hudPic 
       ]
 
--- (drawOurPlayer, drawOtherPlayer, drawBullet, drawEnemy, drawEffect, radToDeg không đổi)
--- ...
+-- SỬA ĐỔI: drawOurPlayer (thêm Scale)
 drawOurPlayer :: GameAssets -> PlayerState -> Animation -> Picture
 drawOurPlayer assets ps anim =
   let
     (x, y) = (vecX $ psPosition ps, vecY $ psPosition ps)
     turretFrame = getCurrentFrame anim
+    -- Sprite 128px -> Hiển thị 64px (khớp hitbox 32x32)
+    tankScale = 0.5 
   in
     Translate x y $ Pictures
       [ 
-        Rotate (radToDeg $ psBodyAngle ps) (gaTankBody assets)
-      , Rotate (radToDeg $ psTurretAngle ps) turretFrame
+        Rotate (radToDeg $ psBodyAngle ps) $ 
+          Scale tankScale tankScale (gaTankBody assets) -- <-- THÊM SCALE
+      , Rotate (radToDeg $ psTurretAngle ps) $
+          Scale tankScale tankScale turretFrame -- <-- THÊM SCALE
       ]
 
+-- SỬA ĐỔI: drawOtherPlayer (thêm Scale)
 drawOtherPlayer :: GameAssets -> PlayerState -> Picture
 drawOtherPlayer assets ps =
   let
@@ -181,11 +174,14 @@ drawOtherPlayer assets ps =
     turretFrame = if null (gaTurretFrames assets)
                     then Blank
                     else head (gaTurretFrames assets)
+    tankScale = 0.5 -- <-- THÊM
   in
     Translate x y $ Pictures
       [ 
-        Rotate (radToDeg $ psBodyAngle ps) (gaTankBody assets)
-      , Rotate (radToDeg $ psTurretAngle ps) turretFrame
+        Rotate (radToDeg $ psBodyAngle ps) $
+          Scale tankScale tankScale (gaTankBody assets) -- <-- THÊM SCALE
+      , Rotate (radToDeg $ psTurretAngle ps) $
+          Scale tankScale tankScale turretFrame -- <-- THÊM SCALE
       ]
 
 drawBullet :: GameAssets -> BulletState -> Picture
