@@ -30,6 +30,7 @@ library
       Types.Bullet
       Types.Enemy
   other-modules:
+      Types.Map
       Paths_shared
   hs-source-dirs:
       src
