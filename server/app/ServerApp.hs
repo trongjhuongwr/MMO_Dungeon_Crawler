@@ -18,7 +18,8 @@ import qualified Data.ByteString.Lazy as LBS
 import qualified Network.Socket.ByteString as BS
 import Data.ByteString.Lazy.Internal (toStrict)
 
-import Systems.MapLoader (loadMapFromFile) -- <-- THÊM IMPORT
+import Systems.MapLoader (loadMapFromFile) -- <-- IMPORT CÓ SẴN
+import Types.Player (PlayerState(..)) -- <-- THÊM IMPORT NÀY
 
 tickRate :: Int
 tickRate = 30
@@ -59,15 +60,30 @@ gameLoop sock gameStateRef = forever $ do
   gs <- takeMVar gameStateRef
   let dt = fromIntegral tickInterval / 1000000.0
   let gs' = updatePlayerPhysics dt gs
-  let gs_ai = updateAI dt gs'
+  
+  -- let gs_ai = updateAI dt gs' -- <-- TẮT AI
+  let gs_ai = gs'               -- <-- THAY THẾ
+  
   let gs'' = updateBulletPhysics dt gs_ai
   let gs''' = resolveCollisions gs''
   let gs'''' = spawnNewBullets gs'''
-  let finalGameState = filterDeadEntities gs''''
+
+  -- ===== SỬA LỖI LOGIC TẠI ĐÂY =====
+  
+  -- BƯỚC 1: Lọc đạn và quái (như cũ)
+  let gs_filtered_entities = filterDeadEntities gs''''
+
+  -- BƯỚC 2: Lọc người chơi đã chết (logic mới)
+  let filteredPlayers = Map.filter (\p -> psHealth p > 0) (gsPlayers gs_filtered_entities)
+
+  -- BƯỚC 3: Đây là state cuối cùng
+  let finalGameState = gs_filtered_entities { gsPlayers = filteredPlayers }
+  
+  -- ===================================
 
   -- SỬA ĐỒI: Tạo snapshot KHÔNG CÓ MAP
   let snapshot = WorldSnapshot
-        { wsPlayers = Map.elems (gsPlayers finalGameState)
+        { wsPlayers = Map.elems (gsPlayers finalGameState) -- <-- Dùng finalGameState
         , wsEnemies = gsEnemies finalGameState
         , wsBullets = gsBullets finalGameState
         }
@@ -77,7 +93,8 @@ gameLoop sock gameStateRef = forever $ do
   let strictSnapshot = toStrict lazySnapshot
   let clientAddrs = Map.keys (gsPlayers finalGameState)
   mapM_ (BS.sendTo sock strictSnapshot) clientAddrs
-  putStrLn $ "[Server] Sent snapshot to " ++ show (length clientAddrs) ++ " client(s)"
+  -- Bỏ log này đi để đỡ spam console
+  -- putStrLn $ "[Server] Sent snapshot to " ++ show (length clientAddrs) ++ " client(s)"
 
   let cleanGameState = finalGameState { gsTick = gsTick gs + 1, gsCommands = [] }
   putMVar gameStateRef cleanGameState

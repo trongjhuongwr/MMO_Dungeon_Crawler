@@ -27,22 +27,19 @@ initialGameState loadedMap spawnPoints = GameState
   { gsTick = 0
   , gsCommands = []
   , gsPlayers = Map.empty
-  , gsEnemies = -- TODO: Tải enemy spawns từ metadata của map
-      [ EnemyState { esId = 1, esPosition = Vec2 (25 * 32) (25 * 32), esHealth = 10 }
-      , EnemyState { esId = 2, esPosition = Vec2 (48 * 32) (24 * 32), esHealth = 10 }
-      , EnemyState { esId = 3, esPosition = Vec2 (48 * 32) (26 * 32), esHealth = 10 }
-      , EnemyState { esId = 4, esPosition = Vec2 (85 * 32) (25 * 32), esHealth = 50 }
-      ]
+  , gsEnemies = [] -- <-- TẠM THỜI TẮT QUÁI
   , gsBullets = []
-  , gsNextId = 5
+  , gsNextId = 1 -- <-- BẮT ĐẦU ID TỪ 1
   , gsMap = loadedMap     
   , gsSpawns = spawnPoints 
   }
 
-initialPlayerState :: Vec2 -> PlayerState
-initialPlayerState spawnPos = PlayerState
+-- SỬA HÀM NÀY
+initialPlayerState :: Vec2 -> Int -> PlayerState
+initialPlayerState spawnPos playerId = PlayerState
   { 
-    psPosition = spawnPos
+    psId = playerId -- <-- GÁN ID
+  , psPosition = spawnPos
   , psBodyAngle = 0.0
   , psTurretAngle = 0.0
   , psHealth = 100

@@ -8,9 +8,10 @@ import Types.Common (Vec2)
 
 -- | Dữ liệu trạng thái của một người chơi, được server gửi về client.
 data PlayerState = PlayerState
-  { psPosition    :: Vec2    -- Vị trí hiện tại
+  { psId          :: Int     -- <-- THÊM DÒNG NÀY
+  , psPosition    :: Vec2    -- Vị trí hiện tại
   , psBodyAngle   :: Float   -- Góc xoay của thân xe (radians)
-  , psTurretAngle :: Float  
+  , psTurretAngle :: Float
   , psHealth      :: Int
   } deriving (Show, Generic)
 

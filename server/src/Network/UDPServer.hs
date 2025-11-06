@@ -14,7 +14,7 @@ import Data.ByteString.Lazy.Internal (fromStrict)
 
 import Core.Types (Command(..), GameState(..), initialPlayerState)
 import Types.Common (Vec2(..))
-import Types.Player (PlayerCommand(..))
+import Types.Player (PlayerCommand(..), PlayerState(..)) -- <-- Import PlayerState(..)
 import qualified Data.Map as Map
 
 -- Vòng lặp chính để lắng nghe các gói tin UDP
@@ -32,10 +32,10 @@ udpListenLoop sock gameStateRef = forever $ do
         Right (_, _, command) -> do
           -- ... (log) ...
           modifyMVar_ gameStateRef $ \gs -> do
-            -- SỬA ĐỔI: Logic gán spawn point
-            let (newPlayers, newCommand) =
+            -- SỬA ĐỔI: Logic gán spawn point VÀ ID
+            let (newPlayers, newCommand, newNextId) = -- <-- Thêm newNextId
                   if Map.member addr (gsPlayers gs)
-                    then (gsPlayers gs, Command addr (command :: PlayerCommand))
+                    then (gsPlayers gs, Command addr (command :: PlayerCommand), gsNextId gs) -- <-- ID giữ nguyên
                     else -- Nếu chưa, tạo player mới VÀ GÁN VỊ TRÍ SPAWN
                       let
                         playerCount = Map.size (gsPlayers gs)
@@ -45,11 +45,14 @@ udpListenLoop sock gameStateRef = forever $ do
                         spawnPos = if null spawnPoints
                                      then Vec2 0 0 -- Fallback
                                      else spawnPoints !! (playerCount `mod` length spawnPoints)
+                        
+                        -- Lấy ID mới
+                        newPlayerId = gsNextId gs
+                        newPlayer = initialPlayerState spawnPos newPlayerId -- Gán spawnPos và ID
 
-                        newPlayer = initialPlayerState spawnPos -- Gán spawnPos
                       in
-                        (Map.insert addr newPlayer (gsPlayers gs), Command addr command)
+                        (Map.insert addr newPlayer (gsPlayers gs), Command addr command, newPlayerId + 1) -- <-- Tăng NextId
             
             let newCommands = newCommand : gsCommands gs
-            pure gs { gsCommands = newCommands, gsPlayers = newPlayers }
+            pure gs { gsCommands = newCommands, gsPlayers = newPlayers, gsNextId = newNextId } -- <-- Cập nhật NextId
     else pure ()
