@@ -7,7 +7,6 @@ import GHC.Generics (Generic)
 import Types.Common (Vec2)
 import Types.Tank (TankType)
 
--- | Dữ liệu trạng thái của một người chơi, được server gửi về client.
 data PlayerState = PlayerState
   { psId          :: Int
   , psPosition    :: Vec2
@@ -15,6 +14,7 @@ data PlayerState = PlayerState
   , psTurretAngle :: Float
   , psHealth      :: Int
   , psTankType    :: TankType
+  , psLives       :: Int     -- <-- THÊM DÒNG NÀY
   } deriving (Show, Generic)
 
 instance Binary PlayerState

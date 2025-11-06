@@ -32,7 +32,6 @@ import Systems.MapLoader (loadMapFromFile)
 import Renderer.Resources (Resources(..))
 
 
--- SỬA ĐỔI: Thêm 2 animation
 data ClientState = ClientState
   { csKeys              :: KeyMap
   , csMousePos          :: (Float, Float)
@@ -41,9 +40,10 @@ data ClientState = ClientState
   , csDidFire           :: Bool
   , csEffects           :: [Effect]
   , csNextEffectId      :: Int
-  , csTurretAnimRapid   :: Animation -- <-- SỬA
-  , csTurretAnimBlast   :: Animation -- <-- THÊM
+  , csTurretAnimRapid   :: Animation 
+  , csTurretAnimBlast   :: Animation 
   , csResources         :: Resources
+  , csMyId              :: Maybe Int 
   }
 
 initialWorldSnapshot :: WorldSnapshot
@@ -56,7 +56,6 @@ initialWorldSnapshot = WorldSnapshot
 dummyAnim :: Animation
 dummyAnim = Animation [] 0 0 0 False
 
--- SỬA ĐỔI: Khởi tạo 2 animation
 initialClientState :: GameMap -> Resources -> ClientState
 initialClientState gmap assets = ClientState
   { csKeys = Set.empty
@@ -66,9 +65,10 @@ initialClientState gmap assets = ClientState
   , csDidFire = False
   , csEffects = []
   , csNextEffectId = 0
-  , csTurretAnimRapid = dummyAnim -- <-- SỬA
-  , csTurretAnimBlast = dummyAnim -- <-- THÊM
+  , csTurretAnimRapid = dummyAnim
+  , csTurretAnimBlast = dummyAnim
   , csResources = assets
+  , csMyId = Nothing 
   }
 
 main :: IO ()
@@ -104,7 +104,6 @@ main = withSocketsDo $ do
 runGame :: SockAddr -> Socket -> Resources -> GameMap -> IO ()
 runGame serverAddr sock assets clientMap = do
   
-  -- SỬA ĐỔI: Tạo cả 2 animation
   let turretAnimRapid = Animation
         { animFrames = resTurretFramesRapid assets
         , animFrameTime = 0.05
@@ -120,7 +119,6 @@ runGame serverAddr sock assets clientMap = do
         , animLoops = False
         }
 
-  -- SỬA ĐỔI: Gán 2 animation
   let initialState = (initialClientState clientMap assets) 
         { csTurretAnimRapid = turretAnimRapid
         , csTurretAnimBlast = turretAnimBlast
@@ -128,10 +126,16 @@ runGame serverAddr sock assets clientMap = do
   
   clientStateRef <- newMVar initialState
   
+  -- ===== SỬA LỖI RACE CONDITION =====
+  -- (1) Khởi động luồng lắng nghe (Listen Loop) TRƯỚC
+  _ <- forkIO $ networkListenLoop sock clientStateRef
+  
+  -- (2) Gửi gói tin Handshake SAU
   putStrLn "[DEBUG] Sending initial handshake packet..."
   let initialCmd = encode (PlayerCommand (Vec2 0 0) 0.0 False)
   _ <- BS.sendTo sock (toStrict initialCmd) serverAddr
-  _ <- forkIO $ networkListenLoop sock clientStateRef
+  -- ===================================
+  
   playIO
     (InWindow "MMO Dungeon Crawler" (800, 600) (10, 10))
     black 60
@@ -148,42 +152,45 @@ renderIO mvar = do
   let snapshot = csWorld cs
   let assets = csResources cs
   
-  -- Tính toán góc nòng súng của local
-  let (mouseX, mouseY) = csMousePos cs
-  let mathAngle = atan2 mouseY mouseX 
-  let glossAngle = mathAngle - (pi / 2)
-  let localTurretAngle = -glossAngle 
-  
-  -- SỬA ĐỔI: Truyền cả 2 animation vào render
-  return $ render assets gameMap snapshot (csEffects cs) (csTurretAnimRapid cs) (csTurretAnimBlast cs) localTurretAngle
+  -- Truyền `csMyId` vào render
+  return $ render assets gameMap snapshot (csEffects cs) (csTurretAnimRapid cs) (csTurretAnimBlast cs) (csMyId cs)
 
 networkListenLoop :: Socket -> MVar ClientState -> IO ()
 networkListenLoop sock stateRef = forever $ do
   (strictMsg, _) <- BS.recvFrom sock 8192
+  
   case decodeOrFail (fromStrict strictMsg) of
     Left (_, _, err) -> do
-      putStrLn $ "[DEBUG Network] Failed to decode: " ++ err
-    Right (_, _, newSnapshot) -> do
+      putStrLn $ "[DEBUG Network] Failed to decode ServerPacket: " ++ err
+    Right (_, _, serverPkt) -> do
       modifyMVar_ stateRef (\cs ->
-        let
-          assets = csResources cs
-          oldWorld = csWorld cs
-          oldBullets = wsBullets oldWorld
-          newBulletIds = Set.fromList (map bsId (wsBullets newSnapshot))
-          disappearedBullets = filter (\b -> bsId b `Set.notMember` newBulletIds) oldBullets
+        
+        case serverPkt of
           
-          (newNextId, newEffects) = foldl' makeEffect (csNextEffectId cs, []) disappearedBullets
-            where
-              makeEffect :: (Int, [Effect]) -> BulletState -> (Int, [Effect])
-              makeEffect (nextId, effects) bullet =
-                let effect = makeExplosion nextId (resExplosionFrames assets) (bsPosition bullet)
-                in (nextId + 1, effect : effects)
-          
-        in
-          pure cs { csWorld = newSnapshot, csEffects = csEffects cs ++ newEffects, csNextEffectId = newNextId }
+          SPWelcome myId -> do
+            putStrLn $ "SERVER: You are Player " ++ show myId
+            pure cs { csMyId = Just myId }
+            
+          SPSnapshot newSnapshot -> 
+            let
+              assets = csResources cs
+              oldWorld = csWorld cs
+              oldBullets = wsBullets oldWorld
+              newBulletIds = Set.fromList (map bsId (wsBullets newSnapshot))
+              disappearedBullets = filter (\b -> bsId b `Set.notMember` newBulletIds) oldBullets
+              
+              (newNextId, newEffects) = foldl' makeEffect (csNextEffectId cs, []) disappearedBullets
+                where
+                  makeEffect :: (Int, [Effect]) -> BulletState -> (Int, [Effect])
+                  makeEffect (nextId, effects) bullet =
+                    -- SỬA LỖI BUILD (TYPO):
+                    let effect = makeExplosion nextId (resExplosionFrames assets) (bsPosition bullet)
+                    in (nextId + 1, effect : effects)
+              
+            in
+              pure cs { csWorld = newSnapshot, csEffects = csEffects cs ++ newEffects, csNextEffectId = newNextId }
         )
 
--- SỬA ĐỔI: Bắn -> kích hoạt CẢ HAI anim
 handleInput :: Event -> ClientState -> ClientState
 handleInput event cs =
   case event of
@@ -223,7 +230,6 @@ sendPlayerCommand serverAddr sock cs = do
   _ <- BS.sendTo sock strictMsg serverAddr
   return ()
 
--- SỬA ĐỔI: Cập nhật CẢ HAI anim
 updateClient :: Float -> ClientState -> ClientState
 updateClient dt cs =
   let

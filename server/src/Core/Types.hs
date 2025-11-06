@@ -6,8 +6,8 @@ import Types.Common (Vec2(..))
 import Types.Bullet (BulletState(..))
 import Types.Enemy (EnemyState(..))
 import Types.Map (GameMap)
-import Types.Tank (TankType)
-import qualified Data.Map as Map
+import Types.Tank (TankType) 
+import qualified Data.Map as Map  
 
 
 data GameState = GameState
@@ -35,6 +35,7 @@ initialGameState loadedMap spawnPoints = GameState
   , gsSpawns = spawnPoints 
   }
 
+-- SỬA HÀM NÀY
 initialPlayerState :: Vec2 -> Int -> TankType -> PlayerState
 initialPlayerState spawnPos playerId tankType = PlayerState
   { 
@@ -43,5 +44,6 @@ initialPlayerState spawnPos playerId tankType = PlayerState
   , psBodyAngle = 0.0
   , psTurretAngle = 0.0
   , psHealth = 100
-  , psTankType = tankType -- <-- GÁN LOẠI TANK
+  , psTankType = tankType
+  , psLives = 3 -- <-- THÊM DÒNG NÀY (theo Gameplay.md)
   }

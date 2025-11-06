@@ -17,7 +17,7 @@ import qualified Data.Array as Array
 import UI.HUD (renderHUD) 
 import Data.Maybe (maybe) 
 import qualified Data.List as List 
-import Data.Ord (comparing) -- <-- THÊM IMPORT NÀY
+import Data.Ord (comparing) 
 
 import Renderer.Resources (Resources(..))
 
@@ -52,31 +52,24 @@ render :: Resources
        -> [Effect] 
        -> Animation -- ^ animRapid
        -> Animation -- ^ animBlast
-       -> Float     -- ^ localTurretAngle
+       -> Maybe Int -- ^ mMyId
        -> Picture
-render assets gameMap snapshot effects animRapid animBlast localTurretAngle =
+render assets gameMap snapshot effects animRapid animBlast mMyId =
   let
-    -- SỬA LỖI 1: Sửa logic tìm "ourPlayer" để chống nhấp nháy
-    -- Tìm người chơi có góc nòng súng GẦN NHẤT với góc chuột local
-    findOurPlayer :: Maybe PlayerState
-    findOurPlayer = 
-      if null (wsPlayers snapshot) 
-        then Nothing
-        else 
-          Just $ List.minimumBy 
-                 (comparing (\p -> abs (psTurretAngle p - localTurretAngle))) 
-                 (wsPlayers snapshot)
-    
+    -- SỬA LỖI 1 (NHẤP NHÁY): Dùng ID
     (ourPlayer, otherPlayers) = 
-      case findOurPlayer of
-        Just p  -> (Just p, List.filter (\p' -> psId p /= psId p') (wsPlayers snapshot))
-        Nothing -> (Nothing, []) -- Không có người chơi nào
+      case mMyId of
+        Nothing -> (Nothing, wsPlayers snapshot) -- Vẫn đang chờ Welcome packet
+        Just myId -> 
+          ( List.find (\p -> psId p == myId) (wsPlayers snapshot)
+          , List.filter (\p -> psId p /= myId) (wsPlayers snapshot)
+          )
     
     mapPic = drawMap assets gameMap
     
     hudPic = maybe Blank renderHUD ourPlayer
                
-    -- SỬA LỖI 2: Chọn đúng animation cho tank của MÌNH
+    -- SỬA LỖI 2 (SAI TURRET)
     ourPlayerPic = case ourPlayer of
                      Just p  -> 
                        let 
@@ -137,7 +130,6 @@ drawOtherPlayer assets ps =
   let
     (x, y) = (vecX $ psPosition ps, vecY $ psPosition ps)
     
-    -- Logic này đã đúng, nó sẽ render đúng tank của địch
     (bodyPic, turretPic) = case psTankType ps of
       Tank.Rapid -> (resTankBodyRapid assets, head $ resTurretFramesRapid assets)
       Tank.Blast -> (resTankBodyBlast assets, head $ resTurretFramesBlast assets)

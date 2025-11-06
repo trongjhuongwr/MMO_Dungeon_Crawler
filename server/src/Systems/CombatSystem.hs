@@ -8,7 +8,6 @@ import Types.Enemy (EnemyState(..))
 import Types.Common (Vec2(..), (*^), vecLength)
 import Types.Tank (TankType(..))
 import qualified Types.Tank as Tank
---
 import Network.Socket (SockAddr)
 import qualified Data.Map as Map
 import Data.List (nub) 
@@ -43,7 +42,6 @@ spawnNewBullets gs =
             vel = Vec2 (sin angle) (cos angle) *^ bulletSpeed
             pos = psPosition player + (vel *^ 0.05)
             
-            -- SỬA ĐỔI: Dùng qualified
             newBulletType = case psTankType player of
                               Tank.Rapid -> Bullet.Normal
                               Tank.Blast -> Bullet.Blast
@@ -134,6 +132,7 @@ findPlayerCollisions bullets playersMap =
   in
     (collidedBulletIds, updatedPlayersMap)
 
+-- SỬA HÀM NÀY (Đã sửa từ Bước 2.3)
 damagePlayers :: [(Int, Bullet.BulletType)] -> Map.Map SockAddr PlayerState -> Map.Map SockAddr PlayerState
 damagePlayers damageList playersMap =
   foldl (flip applyDamage) playersMap damageList
@@ -144,15 +143,18 @@ damagePlayers damageList playersMap =
       
     damagePlayer :: Int -> Bullet.BulletType -> PlayerState -> PlayerState
     damagePlayer attackedPlayerId bulletType player =
-      if psId player == attackedPlayerId
-        then
-          -- SỬA ĐỔI: Dùng qualified
+      if psId player /= attackedPlayerId || psHealth player <= 0 -- Nếu không phải player bị bắn, HOẶC player đã chết, bỏ qua
+        then player 
+        else
           let damage = case bulletType of
                          Bullet.Normal -> 10
                          Bullet.Blast  -> 30
-          in player { psHealth = psHealth player - damage }
-        else 
-          player
+              newHealth = psHealth player - damage
+          in 
+            if newHealth <= 0
+              -- SỬA LOGIC: Hết máu -> Trừ 1 mạng, không để máu âm
+              then player { psHealth = 0, psLives = psLives player - 1 }
+              else player { psHealth = newHealth }
 
 isPlayerColliding :: (BulletState, PlayerState) -> Bool
 isPlayerColliding (bullet, player) =
