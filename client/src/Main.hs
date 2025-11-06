@@ -5,7 +5,7 @@ import System.IO (hSetEncoding, stdout, stderr, utf8)
 import Data.Binary (encode, decodeOrFail)
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar
-import Control.Monad (forever, when) -- <-- THÊM 'when'
+import Control.Monad (forever, when)
 import Graphics.Gloss.Interface.IO.Game
 import Graphics.Gloss.Juicy (fromDynamicImage, loadJuicyPNG)
 import qualified Data.Set as Set
@@ -23,7 +23,7 @@ import Types.Player
 import Types.Common
 import Types.Bullet (BulletState(..))
 import Types.Enemy (EnemyState(..))
-import Types.Map (GameMap(..), TileType(..)) -- <-- THÊM
+import Types.Map (GameMap(..), TileType(..))
 import Input (KeyMap, calculateMoveVector)
 import Core.Renderer (render)
 import Core.Effect (Effect(..), makeExplosion, updateEffect, isEffectFinished)
@@ -38,7 +38,7 @@ data ClientState = ClientState
   { csKeys         :: KeyMap
   , csMousePos     :: (Float, Float)
   , csWorld        :: WorldSnapshot
-  , csGameMap      :: GameMap -- <-- THÊM: Client tự giữ map
+  , csGameMap      :: GameMap -- <-- Client tự giữ map
   , csDidFire      :: Bool
   , csEffects      :: [Effect]
   , csNextEffectId :: Int
@@ -71,9 +71,12 @@ initialClientState gmap assets = ClientState
 
 main :: IO ()
 main = withSocketsDo $ do
+  hSetEncoding stdout utf8
+  hSetEncoding stderr utf8
+  
   putStrLn "Starting client..."
   
-  -- SỬA ĐỔI: Gọi hàm loadResources DUY NHẤT
+  -- Gọi hàm loadResources DUY NHẤT
   eResources <- R.loadResources 
   
   case eResources of
@@ -94,17 +97,17 @@ main = withSocketsDo $ do
           bind sock (SockAddrInet 0 0)
           addr <- head <$> getAddrInfo (Just defaultHints { addrSocketType = Datagram }) (Just "127.0.0.1") (Just "8888")
           
-          -- SỬA ĐỔI: Truyền 'assets' vào runGame
+          -- Truyền 'assets' vào runGame
           runGame (addrAddress addr) sock assets clientMap
   
 
 runGame :: SockAddr -> Socket -> Resources -> GameMap -> IO ()
 runGame serverAddr sock assets clientMap = do
   let turretAnim = Animation
-        { animFrames = resTurretFrames assets -- SỬA: dùng resTurretFrames
+        { animFrames = resTurretFrames assets -- Dùng resTurretFrames
         , animFrameTime = 0.05
         , animTimer = 0
-        , animCurrentFrame = length (resTurretFrames assets) -- SỬA
+        , animCurrentFrame = length (resTurretFrames assets)
         , animLoops = False
         }
 
@@ -124,7 +127,6 @@ runGame serverAddr sock assets clientMap = do
     handleInputIO
     (updateClientIO serverAddr sock)
 
--- SỬA ĐỔI: renderIO
 renderIO :: MVar ClientState -> IO Picture
 renderIO mvar = do
   cs <- readMVar mvar
@@ -135,7 +137,7 @@ renderIO mvar = do
   
   return $ render assets gameMap snapshot (csEffects cs) (csTurretAnim cs)
 
--- SỬA ĐỔI: networkListenLoop (lấy assets từ MVar)
+-- networkListenLoop (lấy assets từ MVar)
 networkListenLoop :: Socket -> MVar ClientState -> IO ()
 networkListenLoop sock stateRef = forever $ do
   (strictMsg, _) <- BS.recvFrom sock 8192
@@ -157,7 +159,7 @@ networkListenLoop sock stateRef = forever $ do
             where
               makeEffect :: (Int, [Effect]) -> BulletState -> (Int, [Effect])
               makeEffect (nextId, effects) bullet =
-                -- SỬA: dùng resExplosionFrames
+                -- Dùng resExplosionFrames
                 let effect = makeExplosion nextId (resExplosionFrames assets) (bsPosition bullet)
                 in (nextId + 1, effect : effects)
           
