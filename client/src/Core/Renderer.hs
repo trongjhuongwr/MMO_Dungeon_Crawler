@@ -10,13 +10,14 @@ import Types.Enemy (EnemyState(..))
 import Types.Map (GameMap(..), TileType(..)) 
 import Types.Tank (TankType(..))
 import qualified Types.Tank as Tank
---
 import Core.Effect (Effect(..))
 import Core.Animation (Animation, getCurrentFrame) 
 import qualified Data.Map as Map 
 import qualified Data.Array as Array 
 import UI.HUD (renderHUD) 
 import Data.Maybe (maybe) 
+import qualified Data.List as List 
+import Data.Ord (comparing) -- <-- THÊM IMPORT NÀY
 
 import Renderer.Resources (Resources(..))
 
@@ -44,24 +45,48 @@ drawMap assets gmap =
     Pictures (map drawTile tileList)
 
 
-render :: Resources -> GameMap -> WorldSnapshot -> [Effect] -> Animation -> Picture
-render assets gameMap snapshot effects turretAnim =
+-- SỬA HÀM NÀY ĐỂ SỬA LỖI GAMEPLAY
+render :: Resources 
+       -> GameMap 
+       -> WorldSnapshot 
+       -> [Effect] 
+       -> Animation -- ^ animRapid
+       -> Animation -- ^ animBlast
+       -> Float     -- ^ localTurretAngle
+       -> Picture
+render assets gameMap snapshot effects animRapid animBlast localTurretAngle =
   let
-    (ourPlayer, otherPlayers) = case wsPlayers snapshot of
-                                  (p:ps) -> (Just p, ps)
-                                  []     -> (Nothing, [])
+    -- SỬA LỖI 1: Sửa logic tìm "ourPlayer" để chống nhấp nháy
+    -- Tìm người chơi có góc nòng súng GẦN NHẤT với góc chuột local
+    findOurPlayer :: Maybe PlayerState
+    findOurPlayer = 
+      if null (wsPlayers snapshot) 
+        then Nothing
+        else 
+          Just $ List.minimumBy 
+                 (comparing (\p -> abs (psTurretAngle p - localTurretAngle))) 
+                 (wsPlayers snapshot)
+    
+    (ourPlayer, otherPlayers) = 
+      case findOurPlayer of
+        Just p  -> (Just p, List.filter (\p' -> psId p /= psId p') (wsPlayers snapshot))
+        Nothing -> (Nothing, []) -- Không có người chơi nào
     
     mapPic = drawMap assets gameMap
     
     hudPic = maybe Blank renderHUD ourPlayer
                
-    -- SỬA LỖI LOGIC: Tách lại hàm vẽ
+    -- SỬA LỖI 2: Chọn đúng animation cho tank của MÌNH
     ourPlayerPic = case ourPlayer of
-                     Just p  -> [drawOurPlayer assets p turretAnim]
+                     Just p  -> 
+                       let 
+                         ourAnim = if psTankType p == Tank.Blast
+                                     then animBlast
+                                     else animRapid
+                       in [drawOurPlayer assets p ourAnim]
                      Nothing -> []
     
     otherPlayerPics = map (drawOtherPlayer assets) otherPlayers
-    --
         
     (camX, camY) = case ourPlayer of
                      Just p  -> (vecX $ psPosition p, vecY $ psPosition p)
@@ -88,13 +113,11 @@ render assets gameMap snapshot effects turretAnim =
       , hudPic 
       ]
   
--- HÀM MỚI: (trước đây là drawPlayer)
 drawOurPlayer :: Resources -> PlayerState -> Animation -> Picture
 drawOurPlayer assets ps anim =
   let
     (x, y) = (vecX $ psPosition ps, vecY $ psPosition ps)
     
-    -- SỬA ĐỔI: Dùng qualified
     (bodyPic, turretPic) = case psTankType ps of
       Tank.Rapid -> (resTankBodyRapid assets, getCurrentFrame anim)
       Tank.Blast -> (resTankBodyBlast assets, getCurrentFrame anim)
@@ -109,13 +132,12 @@ drawOurPlayer assets ps anim =
           Scale tankScale tankScale turretPic 
       ]
 
--- HÀM MỚI: (để sửa lỗi type)
 drawOtherPlayer :: Resources -> PlayerState -> Picture
 drawOtherPlayer assets ps =
   let
     (x, y) = (vecX $ psPosition ps, vecY $ psPosition ps)
     
-    -- SỬA ĐỔI: Dùng qualified và lấy frame đầu tiên
+    -- Logic này đã đúng, nó sẽ render đúng tank của địch
     (bodyPic, turretPic) = case psTankType ps of
       Tank.Rapid -> (resTankBodyRapid assets, head $ resTurretFramesRapid assets)
       Tank.Blast -> (resTankBodyBlast assets, head $ resTurretFramesBlast assets)
@@ -137,7 +159,6 @@ drawBullet assets bullet =
     (x, y) = (vecX $ bsPosition bullet, vecY $ bsPosition bullet)
     correctAngle = atan2 (vecY $ bsVelocity bullet) (vecX $ bsVelocity bullet)
     
-    -- SỬA ĐỔI: Dùng qualified
     bulletPic = case bsBulletType bullet of
                   Bullet.Normal -> resBulletNormal assets
                   Bullet.Blast  -> resBulletBlast assets
