@@ -1,6 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
 
--- SỬA DÒNG NÀY: Chúng ta chỉ export 'TankType'
 module Types.Tank (TankType(..)) where
 
 import GHC.Generics (Generic)

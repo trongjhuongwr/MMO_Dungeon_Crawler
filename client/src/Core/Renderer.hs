@@ -44,8 +44,6 @@ drawMap assets gmap =
   in
     Pictures (map drawTile tileList)
 
-
--- SỬA HÀM NÀY ĐỂ SỬA LỖI GAMEPLAY
 render :: Resources 
        -> GameMap 
        -> WorldSnapshot 
@@ -56,7 +54,6 @@ render :: Resources
        -> Picture
 render assets gameMap snapshot effects animRapid animBlast mMyId =
   let
-    -- SỬA LỖI 1 (NHẤP NHÁY): Dùng ID
     (ourPlayer, otherPlayers) = 
       case mMyId of
         Nothing -> (Nothing, wsPlayers snapshot) -- Vẫn đang chờ Welcome packet
@@ -69,7 +66,6 @@ render assets gameMap snapshot effects animRapid animBlast mMyId =
     
     hudPic = maybe Blank renderHUD ourPlayer
                
-    -- SỬA LỖI 2 (SAI TURRET)
     ourPlayerPic = case ourPlayer of
                      Just p  -> 
                        let 

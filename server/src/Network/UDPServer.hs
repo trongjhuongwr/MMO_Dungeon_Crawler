@@ -6,10 +6,10 @@ module Network.UDPServer (udpListenLoop) where
 
 import Control.Concurrent.MVar (MVar, modifyMVar)
 import Control.Exception (SomeException, catch)
-import Control.Monad (forever, when) -- <--- ĐÃ THÊM 'when'
-import Data.Binary (decodeOrFail, encode) -- <--- ĐÃ SỬA: Bỏ 'decode'
+import Control.Monad (forever, when)
+import Data.Binary (decodeOrFail, encode)
 import Network.Socket
-import Data.Int (Int64) -- <--- ĐÃ THÊM: Cần cho 'decodeOrFail'
+import Data.Int (Int64)
 
 import qualified Network.Socket.ByteString as BS (recvFrom, sendTo)
 import qualified Data.ByteString.Lazy as LBS
@@ -30,18 +30,16 @@ udpListenLoop sock gameStateRef = forever $ do
     putStrLn $ "Error in recvFrom: " ++ show e
     pure (mempty, SockAddrInet 0 0)
 
-  -- SỬA 2: Dùng 'when' thay vì 'if-then-else'
   when (not (LBS.null (fromStrict strictMsg))) $ do
     let lazyMsg = fromStrict strictMsg
     
-    -- SỬA 1: Dùng 'decodeOrFail' thay vì 'decode'
     case (decodeOrFail lazyMsg :: Either (LBS.ByteString, Int64, String) (LBS.ByteString, Int64, PlayerCommand)) of
       Left (_, _, errMsg) -> do
         putStrLn $ "[Server] Failed to decode PlayerCommand from " ++ show addr ++ ": " ++ errMsg
         pure ()
       Right (_, _, command) -> do
         
-        -- Logic xử lý MVar (đã chính xác)
+        -- Logic xử lý MVar
         mNewPlayerId <- modifyMVar gameStateRef $ \gs -> do
           let (newPlayers, newCommand, newNextId, mIdToSend) =
                 if Map.member addr (gsPlayers gs)
@@ -64,9 +62,9 @@ udpListenLoop sock gameStateRef = forever $ do
           
           pure (newGameState, mIdToSend) 
         
-        -- Hành động IO bên ngoài MVar (đã chính xác)
+        -- Hành động IO bên ngoài MVar
         case mNewPlayerId of
-          Nothing -> pure () -- Không làm gì
+          Nothing -> pure ()
           Just newPlayerId -> do
             -- Player mới, GỬI GÓI WELCOME
             let welcomePkt = SPWelcome newPlayerId

@@ -24,7 +24,7 @@ data MapDefinition = MapDefinition
   { gridWidth    :: Int
   , gridHeight   :: Int
   , playerSpawns :: [Vec2Int]
-  , tileIDs      :: [[Int]] -- <-- THAY ĐỔI: [String] -> [[Int]]
+  , tileIDs      :: [[Int]]
   } deriving (Show, Generic)
 
 instance FromJSON MapDefinition
@@ -35,7 +35,7 @@ gridToWorld (Vec2Int gx gy) =
   -- Nhân với tileSize (32.0)
   Vec2 (fromIntegral gx * 32.0) (fromIntegral gy * 32.0)
 
--- HÀM MỚI: Chuyển đổi Int sang TileType, có kiểm tra
+-- Chuyển đổi Int sang TileType, có kiểm tra
 intToTile :: Int -> TileType
 intToTile i =
   let maxVal = fromEnum (maxBound :: TileType)
