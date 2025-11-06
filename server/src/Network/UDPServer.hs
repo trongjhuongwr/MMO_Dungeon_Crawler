@@ -14,7 +14,8 @@ import Data.ByteString.Lazy.Internal (fromStrict)
 
 import Core.Types (Command(..), GameState(..), initialPlayerState)
 import Types.Common (Vec2(..))
-import Types.Player (PlayerCommand(..), PlayerState(..)) -- <-- Import PlayerState(..)
+import Types.Player (PlayerCommand(..), PlayerState(..))
+import Types.Tank (TankType(..)) -- <-- THÊM IMPORT NÀY
 import qualified Data.Map as Map
 
 -- Vòng lặp chính để lắng nghe các gói tin UDP
@@ -30,29 +31,28 @@ udpListenLoop sock gameStateRef = forever $ do
       case decodeOrFail lazyMsg of
         Left _ -> pure ()
         Right (_, _, command) -> do
-          -- ... (log) ...
           modifyMVar_ gameStateRef $ \gs -> do
-            -- SỬA ĐỔI: Logic gán spawn point VÀ ID
-            let (newPlayers, newCommand, newNextId) = -- <-- Thêm newNextId
+            -- SỬA ĐỔI: Logic gán spawn point, ID, VÀ TANKTYPE
+            let (newPlayers, newCommand, newNextId) =
                   if Map.member addr (gsPlayers gs)
-                    then (gsPlayers gs, Command addr (command :: PlayerCommand), gsNextId gs) -- <-- ID giữ nguyên
-                    else -- Nếu chưa, tạo player mới VÀ GÁN VỊ TRÍ SPAWN
+                    then (gsPlayers gs, Command addr (command :: PlayerCommand), gsNextId gs)
+                    else 
                       let
                         playerCount = Map.size (gsPlayers gs)
                         spawnPoints = gsSpawns gs
                         
-                        -- Chọn điểm spawn (quay vòng nếu hết)
                         spawnPos = if null spawnPoints
-                                     then Vec2 0 0 -- Fallback
+                                     then Vec2 0 0 
                                      else spawnPoints !! (playerCount `mod` length spawnPoints)
                         
-                        -- Lấy ID mới
+                        -- GÁN TANKTYPE: Người đầu là Rapid, còn lại là Blast
+                        newTankType = if playerCount == 0 then Rapid else Blast
+                        
                         newPlayerId = gsNextId gs
-                        newPlayer = initialPlayerState spawnPos newPlayerId -- Gán spawnPos và ID
-
+                        newPlayer = initialPlayerState spawnPos newPlayerId newTankType -- <-- Truyền TankType
                       in
-                        (Map.insert addr newPlayer (gsPlayers gs), Command addr command, newPlayerId + 1) -- <-- Tăng NextId
+                        (Map.insert addr newPlayer (gsPlayers gs), Command addr command, newPlayerId + 1)
             
             let newCommands = newCommand : gsCommands gs
-            pure gs { gsCommands = newCommands, gsPlayers = newPlayers, gsNextId = newNextId } -- <-- Cập nhật NextId
+            pure gs { gsCommands = newCommands, gsPlayers = newPlayers, gsNextId = newNextId }
     else pure ()

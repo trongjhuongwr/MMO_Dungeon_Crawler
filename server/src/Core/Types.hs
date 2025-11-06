@@ -6,13 +6,14 @@ import Types.Common (Vec2(..))
 import Types.Bullet (BulletState(..))
 import Types.Enemy (EnemyState(..))
 import Types.Map (GameMap)
-import qualified Data.Map as Map  -- Dùng Map để quản lý Player
+import Types.Tank (TankType)
+import qualified Data.Map as Map
 
 
 data GameState = GameState
   { gsTick     :: Int
   , gsCommands :: [Command]
-  , gsPlayers  :: Map.Map SockAddr PlayerState -- Dùng Map (SockAddr làm key)
+  , gsPlayers  :: Map.Map SockAddr PlayerState
   , gsEnemies  :: [EnemyState]
   , gsBullets  :: [BulletState]
   , gsNextId   :: Int 
@@ -27,20 +28,20 @@ initialGameState loadedMap spawnPoints = GameState
   { gsTick = 0
   , gsCommands = []
   , gsPlayers = Map.empty
-  , gsEnemies = [] -- <-- TẠM THỜI TẮT QUÁI
+  , gsEnemies = [] 
   , gsBullets = []
-  , gsNextId = 1 -- <-- BẮT ĐẦU ID TỪ 1
+  , gsNextId = 1
   , gsMap = loadedMap     
   , gsSpawns = spawnPoints 
   }
 
--- SỬA HÀM NÀY
-initialPlayerState :: Vec2 -> Int -> PlayerState
-initialPlayerState spawnPos playerId = PlayerState
+initialPlayerState :: Vec2 -> Int -> TankType -> PlayerState
+initialPlayerState spawnPos playerId tankType = PlayerState
   { 
-    psId = playerId -- <-- GÁN ID
+    psId = playerId
   , psPosition = spawnPos
   , psBodyAngle = 0.0
   , psTurretAngle = 0.0
   , psHealth = 100
+  , psTankType = tankType -- <-- GÁN LOẠI TANK
   }

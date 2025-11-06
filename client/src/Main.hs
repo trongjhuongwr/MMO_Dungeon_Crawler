@@ -76,12 +76,11 @@ main = withSocketsDo $ do
   
   putStrLn "Starting client..."
   
-  -- Gọi hàm loadResources DUY NHẤT
   eResources <- R.loadResources 
   
   case eResources of
     Left err -> putStrLn $ "Failed to load resources: " ++ err
-    Right assets -> do -- 'assets' bây giờ là kiểu 'Resources'
+    Right assets -> do 
       putStrLn "Assets loaded successfully. Starting game..."
       
       let mapToLoad = "client/assets/maps/pvp.json" 
@@ -97,19 +96,22 @@ main = withSocketsDo $ do
           bind sock (SockAddrInet 0 0)
           addr <- head <$> getAddrInfo (Just defaultHints { addrSocketType = Datagram }) (Just "127.0.0.1") (Just "8888")
           
-          -- Truyền 'assets' vào runGame
           runGame (addrAddress addr) sock assets clientMap
   
 
 runGame :: SockAddr -> Socket -> Resources -> GameMap -> IO ()
 runGame serverAddr sock assets clientMap = do
+  
+  -- ===== SỬA LỖI Ở ĐÂY =====
+  -- Chúng ta dùng 'resTurretFramesRapid' làm animation mặc định
   let turretAnim = Animation
-        { animFrames = resTurretFrames assets -- Dùng resTurretFrames
+        { animFrames = resTurretFramesRapid assets -- <-- SỬA TÊN
         , animFrameTime = 0.05
         , animTimer = 0
-        , animCurrentFrame = length (resTurretFrames assets)
+        , animCurrentFrame = length (resTurretFramesRapid assets) -- <-- SỬA TÊN
         , animLoops = False
         }
+  -- ==========================
 
   let initialState = (initialClientState clientMap assets) { csTurretAnim = turretAnim }
   
@@ -133,22 +135,19 @@ renderIO mvar = do
   
   let gameMap = csGameMap cs
   let snapshot = csWorld cs
-  let assets = csResources cs -- <-- Lấy assets từ state
+  let assets = csResources cs 
   
   return $ render assets gameMap snapshot (csEffects cs) (csTurretAnim cs)
 
--- networkListenLoop (lấy assets từ MVar)
 networkListenLoop :: Socket -> MVar ClientState -> IO ()
 networkListenLoop sock stateRef = forever $ do
   (strictMsg, _) <- BS.recvFrom sock 8192
-  -- ... (decodeOrFail) ...
   case decodeOrFail (fromStrict strictMsg) of
     Left (_, _, err) -> do
       putStrLn $ "[DEBUG Network] Failed to decode: " ++ err
     Right (_, _, newSnapshot) -> do
       modifyMVar_ stateRef (\cs ->
         let
-          -- Lấy assets từ state để tạo effect
           assets = csResources cs
           oldWorld = csWorld cs
           oldBullets = wsBullets oldWorld

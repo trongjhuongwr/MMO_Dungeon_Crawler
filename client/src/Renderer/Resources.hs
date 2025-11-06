@@ -11,7 +11,6 @@ import Control.Monad (forM)
 import Data.Maybe (catMaybes, mapMaybe)
 import Codec.Picture (readImage, DynamicImage(..), convertRGBA8, pixelAt, generateImage)
 
--- | HÀM TỪ Core/Renderer.hs (Di chuyển về đây)
 loadSpriteSheet :: DynamicImage -> Int -> Int -> Int -> [Picture]
 loadSpriteSheet dynImg frameWidth frameHeight frameCount =
   let
@@ -28,7 +27,6 @@ loadSpriteSheet dynImg frameWidth frameHeight frameCount =
   in
     mapMaybe cropFrame frames
 
--- | HÀM TỪ Main.hs (Di chuyển về đây)
 loadSprite :: FilePath -> (Int, Int) -> (Int, Int) -> IO (Maybe Picture)
 loadSprite path (x, y) (w, h) = do
   eImg <- readImage path
@@ -39,20 +37,22 @@ loadSprite path (x, y) (w, h) = do
           cropped = generateImage (\i j -> pixelAt rgba (x + i) (y + j)) w h
       in return $ fromDynamicImage (ImageRGBA8 cropped)
 
--- SỬA ĐỔI: data Resources (thay thế cho GameAssets)
+-- SỬA ĐỔI: data Resources
 data Resources = Resources
-  { resTiles          :: Map.Map TileType Picture
-  , resTankBody       :: Picture
-  , resTurretFrames   :: [Picture]
-  , resBullet         :: Picture
-  , resExplosionFrames :: [Picture]
-  , resVignetteMask   :: Picture
+  { resTiles             :: Map.Map TileType Picture
+  , resTankBodyRapid     :: Picture
+  , resTurretFramesRapid :: [Picture]
+  , resTankBodyBlast     :: Picture
+  , resTurretFramesBlast :: [Picture]
+  , resBulletNormal      :: Picture
+  , resBulletBlast       :: Picture
+  , resExplosionFrames   :: [Picture]
+  , resVignetteMask      :: Picture
   }
 
--- | Ánh xạ TileType sang đường dẫn file PNG tương ứng
+-- ... (tileTypeToPath giữ nguyên) ...
 tileTypeToPath :: TileType -> Maybe FilePath
 tileTypeToPath tt = case tt of
-  -- Sàn
   Floor_00 -> Just "client/assets/textures/map/floors/floor_00.png"
   Floor_01 -> Just "client/assets/textures/map/floors/floor_01.png"
   Floor_02 -> Just "client/assets/textures/map/floors/floor_02.png"
@@ -75,8 +75,6 @@ tileTypeToPath tt = case tt of
   Floor_Edge_Top_00 -> Just "client/assets/textures/map/floors/floor_edge_top_00.png"
   Floor_Edge_Top_01 -> Just "client/assets/textures/map/floors/floor_edge_top_01.png"
   Floor_Edge_TR -> Just "client/assets/textures/map/floors/floor_edge_tr.png"
-
-  -- Tường
   Wall_Back_00 -> Just "client/assets/textures/map/walls/wall_back_00.png"
   Wall_Back_01 -> Just "client/assets/textures/map/walls/wall_back_01.png"
   Wall_Front_00 -> Just "client/assets/textures/map/walls/wall_front_00.png"
@@ -93,21 +91,26 @@ tileTypeToPath tt = case tt of
   Wall_Right_02 -> Just "client/assets/textures/map/walls/wall_right_02.png"
   Wall_Right_End -> Just "client/assets/textures/map/walls/wall_right_end.png"
   Wall_Right_Start -> Just "client/assets/textures/map/walls/wall_right_start.png"
-
-  -- Empty tiles don't have an image
   Empty -> Nothing
 
--- SỬA ĐỔI: loadResources (tải TẤT CẢ)
+
+-- SỬA ĐỔI: loadResources
 loadResources :: IO (Either String Resources)
 loadResources = do
-  -- Load Player/FX assets
-  mTankBody <- loadSprite "client/assets/textures/tanks/rapid_tank/body.png" (0, 0) (128, 128)
-  eTurretImg <- readImage "client/assets/textures/tanks/rapid_tank/turret.png" 
-  mBullet <- loadJuicyPNG "client/assets/textures/projectiles/bullet_normal.png"
+  -- Load Rapid Tank
+  mTankBodyRapid <- loadSprite "client/assets/textures/tanks/rapid_tank/body.png" (0, 0) (128, 128)
+  eTurretImgRapid <- readImage "client/assets/textures/tanks/rapid_tank/turret.png" 
+  mBulletNormal <- loadJuicyPNG "client/assets/textures/projectiles/bullet_normal.png"
+  
+  -- Load Blast Tank
+  mTankBodyBlast <- loadSprite "client/assets/textures/tanks/blast_tank/body.png" (0, 0) (128, 128)
+  eTurretImgBlast <- readImage "client/assets/textures/tanks/blast_tank/turret.png" 
+  mBulletBlast <- loadJuicyPNG "client/assets/textures/projectiles/bullet_blast.png"
+  
+  -- Load Common FX
   eExplosionImg <- readImage "client/assets/textures/projectiles/explosion_spritesheet_blast.png"
-
   mVignette <- loadJuicyPNG "client/assets/textures/ui/vignette_mask_01.png"
-  -- Load Tile assets
+  
   let allTileTypes = [minBound .. maxBound] :: [TileType]
   tilePairs <- fmap catMaybes $ forM allTileTypes $ \tt -> do
     case tileTypeToPath tt of
@@ -124,18 +127,28 @@ loadResources = do
   putStrLn $ "Loaded " ++ show (Map.size tileMap) ++ " tile pictures."
   
   -- Kiểm tra lỗi
-  case (mTankBody, eTurretImg, mBullet, eExplosionImg, mVignette) of
-    (Just body, Right dynTurretImg, Just bullet, Right dynExplosionImg, Just vignette) -> -- <-- THÊM
+  case ( mTankBodyRapid,  eTurretImgRapid,  mBulletNormal
+       , mTankBodyBlast,  eTurretImgBlast,  mBulletBlast
+       , eExplosionImg, mVignette
+       ) of
+    ( Just bodyRapid,  Right dynTurretRapid,  Just bulletNormal
+      , Just bodyBlast,  Right dynTurretBlast,  Just bulletBlast
+      , Right dynExplosionImg, Just vignette
+      ) -> 
       let
-        turretFrames = loadSpriteSheet dynTurretImg 128 128 8 
+        turretFramesRapid = loadSpriteSheet dynTurretRapid 128 128 8 
+        turretFramesBlast = loadSpriteSheet dynTurretBlast 128 128 8 -- Giả sử 8 frame
         explosionFrames = loadSpriteSheet dynExplosionImg 256 256 8 
       in
         return $ Right $ Resources
           { resTiles = tileMap
-          , resTankBody = body
-          , resTurretFrames = turretFrames
-          , resBullet = bullet
+          , resTankBodyRapid = bodyRapid
+          , resTurretFramesRapid = turretFramesRapid
+          , resTankBodyBlast = bodyBlast
+          , resTurretFramesBlast = turretFramesBlast
+          , resBulletNormal = bulletNormal
+          , resBulletBlast = bulletBlast
           , resExplosionFrames = explosionFrames
           , resVignetteMask = vignette
           }
-    _ -> return $ Left "Failed to load critical assets (tank, bullet, explosion, or vignette)"
+    _ -> return $ Left "Failed to load critical assets (tanks, bullets, explosion, or vignette)"
