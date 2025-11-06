@@ -44,6 +44,7 @@ drawMap assets gmap =
   in
     Pictures (map drawTile tileList)
 
+
 render :: Resources 
        -> GameMap 
        -> WorldSnapshot 
@@ -56,7 +57,7 @@ render assets gameMap snapshot effects animRapid animBlast mMyId =
   let
     (ourPlayer, otherPlayers) = 
       case mMyId of
-        Nothing -> (Nothing, wsPlayers snapshot) -- Vẫn đang chờ Welcome packet
+        Nothing -> (Nothing, wsPlayers snapshot) 
         Just myId -> 
           ( List.find (\p -> psId p == myId) (wsPlayers snapshot)
           , List.filter (\p -> psId p /= myId) (wsPlayers snapshot)
@@ -64,7 +65,8 @@ render assets gameMap snapshot effects animRapid animBlast mMyId =
     
     mapPic = drawMap assets gameMap
     
-    hudPic = maybe Blank renderHUD ourPlayer
+    -- Truyền 'assets' vào renderHUD
+    hudPic = maybe Blank (renderHUD assets) ourPlayer
                
     ourPlayerPic = case ourPlayer of
                      Just p  -> 
