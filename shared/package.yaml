@@ -32,3 +32,4 @@ library:
     - Network.Packet
     - Types.Bullet
     - Types.Enemy
+    - Types.MatchState

@@ -8,7 +8,7 @@ import Types.Enemy (EnemyState(..))
 import Types.Map (GameMap)
 import Types.Tank (TankType) 
 import qualified Data.Map as Map  
-
+import Types.MatchState (MatchState(..))
 
 data GameState = GameState
   { gsTick     :: Int
@@ -19,6 +19,7 @@ data GameState = GameState
   , gsNextId   :: Int 
   , gsMap      :: GameMap
   , gsSpawns   :: [Vec2]
+  , gsMatchState :: MatchState
   }
 
 data Command = Command SockAddr PlayerCommand
@@ -32,7 +33,8 @@ initialGameState loadedMap spawnPoints = GameState
   , gsBullets = []
   , gsNextId = 1
   , gsMap = loadedMap     
-  , gsSpawns = spawnPoints 
+  , gsSpawns = spawnPoints
+  , gsMatchState = Waiting
   }
 
 initialPlayerState :: Vec2 -> Int -> TankType -> PlayerState

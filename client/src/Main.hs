@@ -1,7 +1,8 @@
 module Main where
 
-import Network.Socket
-import System.IO (hSetEncoding, stdout, stderr, utf8)
+import Network.Socket hiding (recv) -- <--- SỬA IMPORT
+import System.IO (hSetEncoding, stdout, stderr, utf8, hSetBuffering, BufferMode(..), hGetLine, IOMode(ReadMode)) -- <--- THÊM IMPORT
+import Control.Exception (bracket, finally, try, SomeException) -- <--- THÊM IMPORT
 import Data.Binary (encode, decodeOrFail)
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar
@@ -30,8 +31,9 @@ import Core.Effect (Effect(..), makeExplosion, updateEffect, isEffectFinished)
 import Core.Animation (Animation(..), updateAnimation, startAnimation)
 import Systems.MapLoader (loadMapFromFile) 
 import Renderer.Resources (Resources(..))
+import Types.MatchState (MatchState(..)) 
 
-
+-- (Phần ClientState, initial... giữ nguyên)
 data ClientState = ClientState
   { csKeys              :: KeyMap
   , csMousePos          :: (Float, Float)
@@ -43,7 +45,8 @@ data ClientState = ClientState
   , csTurretAnimRapid   :: Animation 
   , csTurretAnimBlast   :: Animation 
   , csResources         :: Resources
-  , csMyId              :: Maybe Int 
+  , csMyId              :: Maybe Int
+  , csMatchState        :: MatchState 
   }
 
 initialWorldSnapshot :: WorldSnapshot
@@ -68,42 +71,83 @@ initialClientState gmap assets = ClientState
   , csTurretAnimRapid = dummyAnim
   , csTurretAnimBlast = dummyAnim
   , csResources = assets
-  , csMyId = Nothing 
+  , csMyId = Nothing
+  , csMatchState = Waiting 
   }
 
+-- *** HÀM MAIN ĐÃ ĐƯỢC THAY ĐỔI ***
 main :: IO ()
 main = withSocketsDo $ do
   hSetEncoding stdout utf8
   hSetEncoding stderr utf8
+  hSetBuffering stdout LineBuffering -- Đảm bảo in ra ngay lập tức
   
   putStrLn "Starting client..."
   
   eResources <- R.loadResources 
-  
   case eResources of
     Left err -> putStrLn $ "Failed to load resources: " ++ err
     Right assets -> do 
-      putStrLn "Assets loaded successfully. Starting game..."
+      putStrLn "Assets loaded successfully."
       
       let mapToLoad = "client/assets/maps/pvp.json" 
       putStrLn $ "[Client] Loading map: " ++ mapToLoad
       eMapData <- loadMapFromFile mapToLoad
       
       case eMapData of
-        Left err -> putStrLn $ "CLIENT FATAL: Không thể tải map: " ++ err
+        Left err -> putStrLn $ "CLIENT FATAL: Can't load map: " ++ err
         Right (clientMap, _spawnPoints) -> do
           putStrLn "[Client] Map loaded."
+          -- Gọi hàm lobby TCP MỚI, thay vì chạy game ngay
+          connectToLobby assets clientMap
 
-          sock <- socket AF_INET Datagram defaultProtocol
-          bind sock (SockAddrInet 0 0)
-          addr <- head <$> getAddrInfo (Just defaultHints { addrSocketType = Datagram }) (Just "127.0.0.1") (Just "8888")
-          
-          runGame (addrAddress addr) sock assets clientMap
+-- *** HÀM MỚI: Kết nối đến Lobby TCP trước ***
+connectToLobby :: Resources -> GameMap -> IO ()
+connectToLobby assets clientMap = do
+  putStrLn "[Lobby] Connecting to TCP Server (Lobby) at 127.0.0.1:4000..."
   
+  -- Thử kết nối TCP
+  eResult <- try $ bracket open close run
+  case eResult of
+    Left e -> do
+      let ex = e :: SomeException
+      putStrLn $ "[Lobby] ERROR: Cannot connect to TCP server: " ++ show ex
+      putStrLn "Make sure the server is running."
+    Right (Just True) -> do
+      putStrLn "[Lobby] Connection successful! Starting the game..."
+      -- Chỉ khi kết nối TCP thành công, chúng ta mới chạy game UDP/Gloss
+      runGame assets clientMap
+    _ -> do
+      putStrLn "[Lobby] ERROR: The server did not respond correctly to the message."
+  
+  where
+    -- Mở kết nối TCP
+    open = do
+      addr <- head <$> getAddrInfo (Just defaultHints { addrSocketType = Stream }) (Just "127.0.0.1") (Just "4000")
+      sock <- socket (addrFamily addr) (addrSocketType addr) (addrProtocol addr)
+      connect sock (addrAddress addr)
+      return sock
+      
+    -- Chạy logic (chờ tin nhắn chào mừng)
+    run sock = do
+      h <- socketToHandle sock ReadMode
+      hSetBuffering h LineBuffering -- Đọc theo dòng
+      
+      putStrLn "[Lobby] Connected. Waiting for a welcome message from the server..."
+      msg <- hGetLine h -- Đọc một dòng (chờ "\n")
+      
+      if msg == "S2C_WELCOME_LOBBY"
+        then do
+          putStrLn "[Lobby] Received the welcome message. Authentication successful."
+          return (Just True)
+        else do
+          putStrLn $ "[Lobby] Strange message from the server: " ++ msg
+          return (Just False)
 
-runGame :: SockAddr -> Socket -> Resources -> GameMap -> IO ()
-runGame serverAddr sock assets clientMap = do
-  
+-- *** HÀM NÀY GIỮ NGUYÊN (CHỈ ĐỔI TÊN TỪ main/runGame cũ) ***
+-- Bắt đầu vòng lặp game UDP và Gloss
+runGame :: Resources -> GameMap -> IO ()
+runGame assets clientMap = do
   let turretAnimRapid = Animation
         { animFrames = resTurretFramesRapid assets
         , animFrameTime = 0.05
@@ -126,32 +170,34 @@ runGame serverAddr sock assets clientMap = do
   
   clientStateRef <- newMVar initialState
   
-  -- (1) Khởi động luồng lắng nghe (Listen Loop) TRƯỚC
-  _ <- forkIO $ networkListenLoop sock clientStateRef
+  -- Thiết lập kết nối UDP
+  sockUDP <- socket AF_INET Datagram defaultProtocol
+  bind sockUDP (SockAddrInet 0 0) -- Ràng buộc vào một cổng ngẫu nhiên
+  serverAddrUDP <- head <$> getAddrInfo (Just defaultHints { addrSocketType = Datagram }) (Just "127.0.0.1") (Just "8888")
   
-  -- (2) Gửi gói tin Handshake SAU (để server biết ta tồn tại)
-  putStrLn "[DEBUG] Sending initial handshake packet..."
+  _ <- forkIO $ networkListenLoop sockUDP clientStateRef
+  
+  putStrLn "[Game] Send UDP Handshake packet..."
   let initialCmd = encode (PlayerCommand (Vec2 0 0) 0.0 False)
-  _ <- BS.sendTo sock (toStrict initialCmd) serverAddr
+  _ <- BS.sendTo sockUDP (toStrict initialCmd) (addrAddress serverAddrUDP)
   
+  -- Khởi chạy cửa sổ game
   playIO
     (InWindow "MMO Dungeon Crawler" (800, 600) (10, 10))
     black 60
     clientStateRef
     renderIO
     handleInputIO
-    (updateClientIO serverAddr sock)
+    (updateClientIO (addrAddress serverAddrUDP) sockUDP)
+
 
 renderIO :: MVar ClientState -> IO Picture
 renderIO mvar = do
   cs <- readMVar mvar
-  
   let gameMap = csGameMap cs
   let snapshot = csWorld cs
   let assets = csResources cs
-  
-  -- Truyền `csMyId` vào render
-  return $ render assets gameMap snapshot (csEffects cs) (csTurretAnimRapid cs) (csTurretAnimBlast cs) (csMyId cs)
+  return $ render assets gameMap snapshot (csEffects cs) (csTurretAnimRapid cs) (csTurretAnimBlast cs) (csMyId cs) (csMatchState cs)
 
 networkListenLoop :: Socket -> MVar ClientState -> IO ()
 networkListenLoop sock stateRef = forever $ do
@@ -164,11 +210,15 @@ networkListenLoop sock stateRef = forever $ do
       modifyMVar_ stateRef (\cs ->
         
         case serverPkt of
-          
           SPWelcome myId -> do
-            putStrLn $ "SERVER: You are Player " ++ show myId
+            putStrLn $ "[Game] SERVER: You are Player " ++ show myId
             pure cs { csMyId = Just myId }
-            
+          
+          SPMatchStateUpdate newState -> do
+            when (newState /= csMatchState cs) $ 
+              putStrLn $ "[Game] Match status changed to: " ++ show newState
+            pure cs { csMatchState = newState }
+
           SPSnapshot newSnapshot -> 
             let
               assets = csResources cs
@@ -208,7 +258,10 @@ handleInput event cs =
 
 handleInputIO :: Event -> MVar ClientState -> IO (MVar ClientState)
 handleInputIO event mvar = do
-  modifyMVar_ mvar (pure . handleInput event)
+  modifyMVar_ mvar $ \cs ->
+    if csMatchState cs == InProgress
+      then pure (handleInput event cs) 
+      else pure cs 
   return mvar
 
 sendPlayerCommand :: SockAddr -> Socket -> ClientState -> IO ()
@@ -243,9 +296,10 @@ updateClient dt cs =
 
 updateClientIO :: SockAddr -> Socket -> Float -> MVar ClientState -> IO (MVar ClientState)
 updateClientIO serverAddr sock dt mvar = do
-  -- modifyMVar chờ, lấy MVar, chạy hàm, đặt MVar, và trả về kết quả
   _ <- modifyMVar mvar $ \cs -> do
-    sendPlayerCommand serverAddr sock cs
+    when (csMatchState cs == InProgress) $
+      sendPlayerCommand serverAddr sock cs
+      
     let cs' = updateClient dt cs
     return (cs', ())
   return mvar
