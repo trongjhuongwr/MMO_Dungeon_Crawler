@@ -130,7 +130,7 @@ runGame serverAddr sock assets clientMap = do
   -- (1) Khởi động luồng lắng nghe (Listen Loop) TRƯỚC
   _ <- forkIO $ networkListenLoop sock clientStateRef
   
-  -- (2) Gửi gói tin Handshake SAU
+  -- (2) Gửi gói tin Handshake SAU (để server biết ta tồn tại)
   putStrLn "[DEBUG] Sending initial handshake packet..."
   let initialCmd = encode (PlayerCommand (Vec2 0 0) 0.0 False)
   _ <- BS.sendTo sock (toStrict initialCmd) serverAddr
@@ -246,8 +246,9 @@ updateClient dt cs =
 
 updateClientIO :: SockAddr -> Socket -> Float -> MVar ClientState -> IO (MVar ClientState)
 updateClientIO serverAddr sock dt mvar = do
-  cs <- readMVar mvar
-  sendPlayerCommand serverAddr sock cs
-  let cs' = updateClient dt cs
-  _ <- swapMVar mvar cs' 
+  -- modifyMVar chờ, lấy MVar, chạy hàm, đặt MVar, và trả về kết quả
+  _ <- modifyMVar mvar $ \cs -> do
+    sendPlayerCommand serverAddr sock cs
+    let cs' = updateClient dt cs
+    return (cs', ())
   return mvar
