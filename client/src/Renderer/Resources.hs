@@ -116,12 +116,12 @@ loadResources = do
         maybePic <- loadJuicyPNG path
         case maybePic of
           Nothing -> do
-            putStrLn $ "Cảnh báo: Không load được " ++ path
+            putStrLn $ "Warning: Cannot load " ++ path
             return Nothing
           Just pic -> return $ Just (tt, pic)
         
   let tileMap = Map.fromList tilePairs
-  putStrLn $ "Đã load " ++ show (Map.size tileMap) ++ " tile pictures."
+  putStrLn $ "Loaded " ++ show (Map.size tileMap) ++ " tile pictures."
   
   -- Kiểm tra lỗi
   case (mTankBody, eTurretImg, mBullet, eExplosionImg, mVignette) of
