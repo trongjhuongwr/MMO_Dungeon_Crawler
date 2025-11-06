@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use uncurry" #-}
 module Renderer.Resources
   ( loadResources
   , Resources(..)
@@ -8,7 +10,7 @@ import Graphics.Gloss.Juicy (loadJuicyPNG, fromDynamicImage)
 import Types.Map (TileType(..))
 import qualified Data.Map.Strict as Map
 import Control.Monad (forM)
-import Data.Maybe (catMaybes, mapMaybe)
+import Data.Maybe (catMaybes, mapMaybe, fromMaybe)
 import Codec.Picture (readImage, DynamicImage(..), convertRGBA8, pixelAt, generateImage)
 
 loadSpriteSheet :: DynamicImage -> Int -> Int -> Int -> [Picture]
@@ -47,6 +49,7 @@ data Resources = Resources
   , resBulletBlast       :: Picture
   , resExplosionFrames   :: [Picture]
   , resVignetteMask      :: Picture
+  , resLifeIcons         :: [Picture]
   }
 
 tileTypeToPath :: TileType -> Maybe FilePath
@@ -91,6 +94,8 @@ tileTypeToPath tt = case tt of
   Wall_Right_Start -> Just "client/assets/textures/map/walls/wall_right_start.png"
   Empty -> Nothing
 
+
+-- SỬA ĐỔI 2: Cập nhật 'loadResources'
 loadResources :: IO (Either String Resources)
 loadResources = do
   -- Load Rapid Tank
@@ -106,7 +111,18 @@ loadResources = do
   -- Load Common FX
   eExplosionImg <- readImage "client/assets/textures/projectiles/explosion_spritesheet_blast.png"
   mVignette <- loadJuicyPNG "client/assets/textures/ui/vignette_mask_01.png"
+
+  -- Tải 4 khung hình 'lives'
+  let lifeIconPath = "client/assets/textures/ui/life_icons.png"
+  let lifeCoords = [ ( (297, 132), (77, 20) )   -- 3 Mạng
+                   , ( (201, 132), (77, 20) ) -- 2 Mạng
+                   , ( (105, 132), (77, 20) ) -- 1 Mạng
+                   , ( (9, 132), (77, 20) ) -- 0 Mạng
+                   ]
   
+  mLifeFrames <- mapM (\(pos, size) -> loadSprite lifeIconPath pos size) lifeCoords
+  let mLifeFrames' = catMaybes mLifeFrames
+
   let allTileTypes = [minBound .. maxBound] :: [TileType]
   tilePairs <- fmap catMaybes $ forM allTileTypes $ \tt -> do
     case tileTypeToPath tt of
@@ -122,14 +138,15 @@ loadResources = do
   let tileMap = Map.fromList tilePairs
   putStrLn $ "Loaded " ++ show (Map.size tileMap) ++ " tile pictures."
   
-  -- Kiểm tra lỗi
   case ( mTankBodyRapid,  eTurretImgRapid,  mBulletNormal
        , mTankBodyBlast,  eTurretImgBlast,  mBulletBlast
        , eExplosionImg, mVignette
+       , mLifeFrames'
        ) of
     ( Just bodyRapid,  Right dynTurretRapid,  Just bulletNormal
       , Just bodyBlast,  Right dynTurretBlast,  Just bulletBlast
       , Right dynExplosionImg, Just vignette
+      , lifeFrames
       ) -> 
       let
         turretFramesRapid = loadSpriteSheet dynTurretRapid 128 128 8 
@@ -146,5 +163,6 @@ loadResources = do
           , resBulletBlast = bulletBlast
           , resExplosionFrames = explosionFrames
           , resVignetteMask = vignette
+          , resLifeIcons = lifeFrames
           }
-    _ -> return $ Left "Failed to load critical assets (tanks, bullets, explosion, or vignette)"
+    _ -> return $ Left "Failed to load critical assets (tanks, bullets, explosion, vignette, or life icons)"
