@@ -1,10 +1,15 @@
 {-# LANGUAGE DeriveGeneric #-}
 
-module Types.Tank where
+-- SỬA DÒNG NÀY: Chúng ta chỉ export 'TankType'
+module Types.Tank (TankType(..)) where
 
 import GHC.Generics (Generic)
 import Data.Binary (Binary)
 
-data Tank = Tank { tid :: Int, tname :: String } deriving (Show, Generic) -- Dòng này cần `DeriveGeneric`
+-- Định nghĩa loại tank (Giữ nguyên)
+data TankType
+  = Rapid
+  | Blast
+  deriving (Show, Eq, Generic)
 
-instance Binary Tank
+instance Binary TankType
