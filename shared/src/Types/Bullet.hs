@@ -1,13 +1,12 @@
 {-# LANGUAGE DeriveGeneric #-}
 
--- SỬA DÒNG NÀY
 module Types.Bullet (BulletState(..), BulletType(..)) where
 
 import Data.Binary (Binary)
 import GHC.Generics (Generic)
 import Types.Common (Vec2)
 
--- THÊM MỚI: Định nghĩa loại đạn
+-- Định nghĩa loại đạn
 data BulletType
   = Normal
   | Blast
@@ -19,7 +18,7 @@ instance Binary BulletType
 data BulletState = BulletState
   { bsId         :: Int
   , bsOwnerId    :: Int
-  , bsBulletType :: BulletType -- <-- THÊM DÒNG NÀY
+  , bsBulletType :: BulletType
   , bsPosition   :: Vec2
   , bsVelocity   :: Vec2
   , bsLifetime   :: Float

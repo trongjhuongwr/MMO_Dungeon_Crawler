@@ -37,7 +37,6 @@ loadSprite path (x, y) (w, h) = do
           cropped = generateImage (\i j -> pixelAt rgba (x + i) (y + j)) w h
       in return $ fromDynamicImage (ImageRGBA8 cropped)
 
--- SỬA ĐỔI: data Resources
 data Resources = Resources
   { resTiles             :: Map.Map TileType Picture
   , resTankBodyRapid     :: Picture
@@ -50,7 +49,6 @@ data Resources = Resources
   , resVignetteMask      :: Picture
   }
 
--- ... (tileTypeToPath giữ nguyên) ...
 tileTypeToPath :: TileType -> Maybe FilePath
 tileTypeToPath tt = case tt of
   Floor_00 -> Just "client/assets/textures/map/floors/floor_00.png"
@@ -93,8 +91,6 @@ tileTypeToPath tt = case tt of
   Wall_Right_Start -> Just "client/assets/textures/map/walls/wall_right_start.png"
   Empty -> Nothing
 
-
--- SỬA ĐỔI: loadResources
 loadResources :: IO (Either String Resources)
 loadResources = do
   -- Load Rapid Tank
@@ -137,7 +133,7 @@ loadResources = do
       ) -> 
       let
         turretFramesRapid = loadSpriteSheet dynTurretRapid 128 128 8 
-        turretFramesBlast = loadSpriteSheet dynTurretBlast 128 128 8 -- Giả sử 8 frame
+        turretFramesBlast = loadSpriteSheet dynTurretBlast 128 128 8
         explosionFrames = loadSpriteSheet dynExplosionImg 256 256 8 
       in
         return $ Right $ Resources

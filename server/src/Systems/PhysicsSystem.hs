@@ -15,7 +15,7 @@ playerSpeed :: Float
 playerSpeed = 100.0
 
 playerTurnSpeed :: Float
-playerTurnSpeed = 1.0
+playerTurnSpeed = 1.5
 
 tileSize :: Float
 tileSize = 32.0

@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Eta reduce" #-}
 module Systems.CombatSystem (spawnNewBullets, resolveCollisions) where
 
 import Core.Types (GameState(..), Command(..))
@@ -16,7 +18,7 @@ bulletSpeed :: Float
 bulletSpeed = 300.0
 
 bulletLifetime :: Float
-bulletLifetime = 2.0
+bulletLifetime = 1.0
 
 resolveCollisions :: GameState -> GameState
 resolveCollisions = checkCollisions
@@ -132,7 +134,6 @@ findPlayerCollisions bullets playersMap =
   in
     (collidedBulletIds, updatedPlayersMap)
 
--- SỬA HÀM NÀY (Đã sửa từ Bước 2.3)
 damagePlayers :: [(Int, Bullet.BulletType)] -> Map.Map SockAddr PlayerState -> Map.Map SockAddr PlayerState
 damagePlayers damageList playersMap =
   foldl (flip applyDamage) playersMap damageList
@@ -147,12 +148,12 @@ damagePlayers damageList playersMap =
         then player 
         else
           let damage = case bulletType of
-                         Bullet.Normal -> 10
-                         Bullet.Blast  -> 30
+                         Bullet.Normal -> 5
+                         Bullet.Blast  -> 15
               newHealth = psHealth player - damage
           in 
             if newHealth <= 0
-              -- SỬA LOGIC: Hết máu -> Trừ 1 mạng, không để máu âm
+              -- Hết máu -> Trừ 1 mạng, không để máu âm
               then player { psHealth = 0, psLives = psLives player - 1 }
               else player { psHealth = newHealth }
 

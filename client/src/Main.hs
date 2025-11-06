@@ -126,7 +126,6 @@ runGame serverAddr sock assets clientMap = do
   
   clientStateRef <- newMVar initialState
   
-  -- ===== SỬA LỖI RACE CONDITION =====
   -- (1) Khởi động luồng lắng nghe (Listen Loop) TRƯỚC
   _ <- forkIO $ networkListenLoop sock clientStateRef
   
@@ -134,7 +133,6 @@ runGame serverAddr sock assets clientMap = do
   putStrLn "[DEBUG] Sending initial handshake packet..."
   let initialCmd = encode (PlayerCommand (Vec2 0 0) 0.0 False)
   _ <- BS.sendTo sock (toStrict initialCmd) serverAddr
-  -- ===================================
   
   playIO
     (InWindow "MMO Dungeon Crawler" (800, 600) (10, 10))
@@ -183,7 +181,6 @@ networkListenLoop sock stateRef = forever $ do
                 where
                   makeEffect :: (Int, [Effect]) -> BulletState -> (Int, [Effect])
                   makeEffect (nextId, effects) bullet =
-                    -- SỬA LỖI BUILD (TYPO):
                     let effect = makeExplosion nextId (resExplosionFrames assets) (bsPosition bullet)
                     in (nextId + 1, effect : effects)
               

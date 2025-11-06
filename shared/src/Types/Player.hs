@@ -14,7 +14,7 @@ data PlayerState = PlayerState
   , psTurretAngle :: Float
   , psHealth      :: Int
   , psTankType    :: TankType
-  , psLives       :: Int     -- <-- THÊM DÒNG NÀY
+  , psLives       :: Int
   } deriving (Show, Generic)
 
 instance Binary PlayerState
