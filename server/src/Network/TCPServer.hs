@@ -64,169 +64,77 @@ startTcpServer serverStateRef = withSocketsDo $ do
 handleClient :: Socket -> SockAddr -> MVar ServerState -> IO ()
 handleClient sock addr serverStateRef = do
   h <- socketToHandle sock ReadWriteMode
-  -- hSetBuffering h (BlockBuffering (Just 8192)) -- <-- DÒNG NÀY GÂY LỖI
-  hSetBuffering h NoBuffering -- <<< SỬA THÀNH DÒNG NÀY
+  hSetBuffering h NoBuffering -- Giữ nguyên NoBuffering
   
-  loop h Nothing `catch` \(e :: SomeException) -> do
+  -- Bắt đầu vòng lặp với buffer rỗng
+  loop h Nothing LBS.empty `catch` \(e :: SomeException) -> do
     putStrLn $ "[TCP] Error in client loop: " ++ show e
     handleDisconnect h Nothing -- Ngắt kết nối an toàn
 
   where
-    loop h mPlayerId = do
-      lazyMsg <- LBS.hGet h 8192 
+    -- SỬA: Thêm 'buffer' vào chữ ký hàm
+    loop :: Handle -> Maybe Int -> LBS.ByteString -> IO ()
+    loop h mPlayerId buffer = do
+      -- 1. Đọc thêm dữ liệu
+      newChunk <- (LBS.hGet h 8192) `catch` \(e :: SomeException) -> do
+        -- putStrLn $ "[TCP] hGet Error: " ++ show e
+        pure LBS.empty -- Coi như client ngắt kết nối
       
-      if LBS.null lazyMsg
-      then handleDisconnect h mPlayerId
+      if LBS.null newChunk && LBS.null buffer
+      then handleDisconnect h mPlayerId -- Client đã ngắt kết nối
       else do
-        -- SỬA TỪ ĐÂY: Dùng decodeOrFail
-        let decodeResult = decodeOrFail lazyMsg :: Either (LBS.ByteString, Int64, String) (LBS.ByteString, Int64, ClientTcpPacket)
-        
-        newPlayerId <- case decodeResult of
-          Left (_, _, errMsg) -> do
-            putStrLn $ "[TCP] Decode Error from " ++ show addr ++ ": " ++ errMsg ++ ". Discarding packet."
-            pure mPlayerId -- Giữ nguyên mPlayerId, không làm gì cả
-            
-          Right (remaining, _, pkt) -> do
-            -- Xử lý gói tin thành công
-            (pid, isNew) <- case mPlayerId of
-                    Just pid -> pure (pid, False)
-                    Nothing -> case pkt of
-                      CTP_Login _ _ -> modifyMVar serverStateRef $ \sState -> do
-                        let newId = ssNextPlayerId sState
-                        let newName = "Player" ++ show newId
-                        let newPlayerInfo = PlayerInfo newId newName Nothing False
-                        let newClient = PlayerClient h newPlayerInfo Nothing
-                        let newClients = Map.insert newId newClient (ssClients sState)
-                        let newState = sState { ssClients = newClients, ssNextPlayerId = newId + 1 }
-                        putStrLn $ "[TCP] Client assigned ID: " ++ show newId
-                        pure (newState, (newId, True))
-                      _ -> fail "Received packet before login"
-            
-            putStrLn $ "[TCP] Received from " ++ show pid ++ ": " ++ show pkt
-            
-            -- Xử lý processPacket (đã được chuyển vào đây từ bản vá trước)
-            modifyMVar_ serverStateRef $ \sState -> do
-              case pkt of
-                CTP_Login name _ -> do
-                  let client = ssClients sState Map.! pid
-                  let newPlayerInfo = (pcInfo client) { piName = name }
-                  let newClient = client { pcInfo = newPlayerInfo }
-                  let newClients = Map.insert pid newClient (ssClients sState)
-                  when isNew $ sendTcpPacket h (STP_LoginResult True pid "Login successful")
-                  pure sState { ssClients = newClients }
+        -- 2. Nối buffer cũ với dữ liệu mới
+        let fullBuffer = buffer <> newChunk
+        -- 3. Gọi hàm xử lý buffer
+        processBuffer h mPlayerId fullBuffer
 
-                CTP_CreateRoom -> do
-                  newRoomId <- generateRoomId
-                  let client = ssClients sState Map.! pid
-                  let newRoom = Room newRoomId (Map.singleton pid client) Nothing
-                  let newRooms = Map.insert newRoomId newRoom (ssRooms sState)
-                  sendTcpPacket h (STP_RoomUpdate newRoomId [pcInfo client])
-                  pure sState { ssRooms = newRooms }
-
-                CTP_JoinRoom roomId -> do
-                  case Map.lookup roomId (ssRooms sState) of
-                    Nothing -> do
-                      sendTcpPacket h (STP_Kicked "Room not found")
-                      pure sState
-                    Just room -> do
-                      let client = ssClients sState Map.! pid
-                      let newPlayers = Map.insert pid client (roomPlayers room)
-                      let updatedRoom = room { roomPlayers = newPlayers }
-                      let newRooms = Map.insert roomId updatedRoom (ssRooms sState)
-                      broadcastRoomUpdate updatedRoom
-                      pure sState { ssRooms = newRooms }
-
-                CTP_UpdateLobbyState mTank isReady -> do
-                  let (mRoom, mRoomId) = findRoomByPlayerId pid sState
-                  case (mRoom, mRoomId) of
-                    (Just room, Just roomId) -> do
-                      let client = roomPlayers room Map.! pid
-                      let newPlayerInfo = (pcInfo client) { piSelectedTank = mTank, piIsReady = isReady }
-                      let newClient = client { pcInfo = newPlayerInfo }
-                      let newPlayers = Map.insert pid newClient (roomPlayers room)
-                      let updatedRoom = room { roomPlayers = newPlayers }
-                      let newRooms = Map.insert roomId updatedRoom (ssRooms sState)
-                      
-                      broadcastRoomUpdate updatedRoom
-                      
-                      let (gameCanStart, pInfos) = checkGameStart updatedRoom
-                      if gameCanStart
-                        then do
-                          putStrLn $ "[TCP] Room " ++ roomId ++ " is starting game!"
-                          let p1_info = head pInfos
-                          let p2_info = pInfos !! 1
-                          
-                          let spawns = ssSpawns sState
-                          let p1_spawn = if not (null spawns) then spawns !! 0 else Vec2 0 0
-                          let p2_spawn = if length spawns > 1 then spawns !! 1 else Vec2 50 50
-
-                          let p1_state = initialPlayerState p1_spawn (piId p1_info) (fromJust $ piSelectedTank p1_info)
-                          let p2_state = initialPlayerState p2_spawn (piId p2_info) (fromJust $ piSelectedTank p2_info)
-                          
-                          let fakeAddr1 = SockAddrInet 0 (tupleToHostAddress (0,0,0,1))
-                          let fakeAddr2 = SockAddrInet 0 (tupleToHostAddress (0,0,0,2))
-                          
-                          let playerStates = Map.fromList [(fakeAddr1, p1_state), (fakeAddr2, p2_state)]
-                          
-                          let newRoomGame = initialRoomGameState (ssMap sState) (ssSpawns sState)
-                          let newRoomGame' = newRoomGame { rgsPlayers = playerStates, rgsMatchState = InProgress }
-                          
-                          roomGameMVar <- newMVar newRoomGame'
-                          
-                          let finalRoom = updatedRoom { roomGame = Just roomGameMVar }
-                          let finalRooms = Map.insert roomId finalRoom (ssRooms sState)
-                          
-                          _ <- forkIO $ gameLoop serverStateRef roomId roomGameMVar
-                          
-                          broadcastToRoom finalRoom (STP_GameStarting)
-                          pure sState { ssRooms = finalRooms }
-                        else
-                          pure sState { ssRooms = newRooms } 
-                    _ -> pure sState 
-                
-                CTP_LeaveRoom -> do
-                  let (mRoom, mRoomId) = findRoomByPlayerId pid sState
-                  case (mRoom, mRoomId) of
-                    (Just room, Just roomId) -> do
-                      let newPlayers = Map.delete pid (roomPlayers room)
-                      let updatedRoom = room { roomPlayers = newPlayers }
-                      broadcastRoomUpdate updatedRoom
-                      pure sState { ssRooms = Map.insert roomId updatedRoom (ssRooms sState) }
-                    _ -> pure sState 
-                
-                CTP_RequestRematch -> do
-                  pure sState
-            
-            when (not (LBS.null remaining)) $ do
-              putStrLn $ "[TCP] Warning: " ++ show (LBS.length remaining) ++ " bytes remaining in TCP buffer from " ++ show pid
-              
-            pure (Just pid) -- Trả về PlayerId đã được xác nhận
-
-        -- Gọi lại vòng lặp với PlayerId mới (hoặc cũ nếu decode fail)
-        loop h newPlayerId
-        -- KẾT THÚC SỬA
-
-    findPidByHandle :: Handle -> ServerState -> Maybe Int
-    findPidByHandle h sState =
-      fmap fst (find (\(_, client) -> pcHandle client == h) (Map.assocs (ssClients sState)))
-
-    processPacket :: Handle -> Maybe Int -> ClientTcpPacket -> IO ()
-    processPacket h mPid pkt = do
-      (pid, isNew) <- case mPid of
-              Just pid -> pure (pid, False)
-              Nothing -> case pkt of
-                CTP_Login _ _ -> modifyMVar serverStateRef $ \sState -> do
-                  let newId = ssNextPlayerId sState
-                  let newName = "Player" ++ show newId
-                  let newPlayerInfo = PlayerInfo newId newName Nothing False
-                  let newClient = PlayerClient h newPlayerInfo Nothing
-                  let newClients = Map.insert newId newClient (ssClients sState)
-                  let newState = sState { ssClients = newClients, ssNextPlayerId = newId + 1 }
-                  putStrLn $ "[TCP] Client assigned ID: " ++ show newId
-                  pure (newState, (newId, True))
-                _ -> fail "Received packet before login"
+    -- HÀM MỚI: Xử lý buffer một cách đệ quy
+    processBuffer :: Handle -> Maybe Int -> LBS.ByteString -> IO ()
+    processBuffer h mPlayerId buffer = do
+      -- 3a. Thử decode buffer
+      let decodeResult = decodeOrFail buffer :: Either (LBS.ByteString, Int64, String) (LBS.ByteString, Int64, ClientTcpPacket)
       
-      putStrLn $ "[TCP] Received from " ++ show pid ++ ": " ++ show pkt
+      case decodeResult of
+        -- 4a. Không đủ dữ liệu
+        Left (_, _, errMsg) -> do
+          -- Gói tin chưa hoàn chỉnh, quay lại vòng lặp 'loop' để đọc thêm
+          -- và giữ nguyên 'buffer' hiện tại
+          -- putStrLn $ "[TCP] Incomplete packet: " ++ errMsg ++ ". Buffering " ++ show (LBS.length buffer) ++ " bytes."
+          loop h mPlayerId buffer
+            
+        -- 4b. Decode thành công
+        Right (remaining, _, pkt) -> do
+          -- Xử lý gói tin thành công
+          (pid, isNew) <- case mPlayerId of
+                  Just pid -> pure (pid, False)
+                  Nothing -> case pkt of
+                    CTP_Login _ _ -> modifyMVar serverStateRef $ \sState -> do
+                      let newId = ssNextPlayerId sState
+                      let newName = "Player" ++ show newId
+                      let newPlayerInfo = PlayerInfo newId newName Nothing False
+                      let newClient = PlayerClient h newPlayerInfo Nothing
+                      let newClients = Map.insert newId newClient (ssClients sState)
+                      let newState = sState { ssClients = newClients, ssNextPlayerId = newId + 1 }
+                      putStrLn $ "[TCP] Client assigned ID: " ++ show newId
+                      pure (newState, (newId, True))
+                    _ -> fail "Received packet before login"
+          
+          putStrLn $ "[TCP] Received from " ++ show pid ++ ": " ++ show pkt
+          
+          -- Xử lý logic gói tin
+          processPacket_safe pid isNew h pkt -- (Hàm processPacket_safe được tạo bên dưới)
+          
+          -- 5. ĐỆ QUY: Xử lý phần buffer còn dư
+          -- Nếu còn dư, có thể có gói tin thứ 2 nối đuôi
+          if LBS.null remaining
+            then loop h (Just pid) remaining -- Quay lại chờ dữ liệu mới
+            else do
+              putStrLn $ "[TCP] Processing " ++ show (LBS.length remaining) ++ " remaining bytes in buffer."
+              processBuffer h (Just pid) remaining -- Xử lý ngay phần còn lại
+
+    -- TÁCH LOGIC: Hàm này chỉ xử lý gói tin
+    processPacket_safe :: Int -> Bool -> Handle -> ClientTcpPacket -> IO ()
+    processPacket_safe pid isNew h pkt = do
       modifyMVar_ serverStateRef $ \sState -> do
         case pkt of
           CTP_Login name _ -> do
@@ -282,7 +190,6 @@ handleClient sock addr serverStateRef = do
                     let p1_spawn = if not (null spawns) then spawns !! 0 else Vec2 0 0
                     let p2_spawn = if length spawns > 1 then spawns !! 1 else Vec2 50 50
 
-                    -- 'initialPlayerState' đến từ 'Core.Types'
                     let p1_state = initialPlayerState p1_spawn (piId p1_info) (fromJust $ piSelectedTank p1_info)
                     let p2_state = initialPlayerState p2_spawn (piId p2_info) (fromJust $ piSelectedTank p2_info)
                     
@@ -320,7 +227,8 @@ handleClient sock addr serverStateRef = do
           CTP_RequestRematch -> do
             pure sState
             
-
+    -- Xóa hàm 'processPacket' cũ bị trùng lặp
+    
     handleDisconnect :: Handle -> Maybe Int -> IO ()
     handleDisconnect h mPid = do
       putStrLn $ "[TCP] Client disconnected: " ++ show mPid
@@ -346,6 +254,10 @@ handleClient sock addr serverStateRef = do
               _ -> pure sState { ssClients = newClients } 
 
     -- === HÀM TIỆN ÍCH ===
+    findPidByHandle :: Handle -> ServerState -> Maybe Int
+    findPidByHandle h sState =
+      fmap fst (find (\(_, client) -> pcHandle client == h) (Map.assocs (ssClients sState)))
+
     findRoomByPlayerId :: Int -> ServerState -> (Maybe Room, Maybe String)
     findRoomByPlayerId pid sState =
       let found = find (\(_, room) -> Map.member pid (roomPlayers room)) (Map.assocs (ssRooms sState))

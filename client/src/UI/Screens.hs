@@ -38,7 +38,7 @@ renderLogin username status = Pictures
   , drawButton (80, 50) username -- Ô nhập liệu
   , drawText (-200, -40) 0.2 "Password:"
   , drawButton (80, -30) "********" -- Ô nhập liệu mật khẩu
-  , drawButton (-20, -150) "Login"
+  , drawButton (-20, -150) "  Login"
   , drawText (-80, -200) 0.1 status
   ]
 
