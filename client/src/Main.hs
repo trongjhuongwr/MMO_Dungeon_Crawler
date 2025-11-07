@@ -374,8 +374,8 @@ handleInputLogin event cState@(ClientState { csTcpHandle = h, csState = (S_Login
     (EventKey (SpecialKey KeyBackspace) Down _ _) -> -- Xóa phím
       pure cState { csState = S_Login ld { ldUsername = if null (ldUsername ld) then "" else init (ldUsername ld) } }
     (EventKey (MouseButton LeftButton) Down _ (x, y)) ->
-      -- SỬA DÒNG NÀY: Sửa tọa độ Y từ (-95, -65) thành (-105, -55)
-      if (x > -100 && x < 100 && y > -105 && y < -55) -- Bấm nút Login
+      -- Tọa độ nút Login (tâm: -20, -150; size: 200x50)
+      if (x > -120 && x < 80 && y > -175 && y < -125) -- Bấm nút Login
       then do
         sendTcpPacket h (CTP_Login (ldUsername ld) "")
         pure cState { csState = S_Login ld { ldStatus = "Logging in..." } }

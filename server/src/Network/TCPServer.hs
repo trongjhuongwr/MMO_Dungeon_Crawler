@@ -142,7 +142,11 @@ handleClient sock addr serverStateRef = do
             let newPlayerInfo = (pcInfo client) { piName = name }
             let newClient = client { pcInfo = newPlayerInfo }
             let newClients = Map.insert pid newClient (ssClients sState)
-            when isNew $ sendTcpPacket h (STP_LoginResult True pid "Login successful")
+            
+            -- SỬA DÒNG NÀY:
+            -- Xóa "when isNew" để server LUÔN gửi phản hồi khi nhận được CTP_Login
+            sendTcpPacket h (STP_LoginResult True pid "Login successful")
+            
             pure sState { ssClients = newClients }
 
           CTP_CreateRoom -> do
