@@ -15,11 +15,12 @@ import Core.Animation (Animation, getCurrentFrame)
 import qualified Data.Map as Map 
 import qualified Data.Array as Array 
 import UI.HUD (renderHUD) 
-import Data.Maybe (maybe) 
+import Data.Maybe (maybe, Maybe(..)) 
 import qualified Data.List as List 
 import Data.Ord (comparing) 
 
 import Renderer.Resources (Resources(..))
+import Types.MatchState (MatchState(..)) 
 
 
 tileSize :: Float
@@ -52,8 +53,9 @@ render :: Resources
        -> Animation -- ^ animRapid
        -> Animation -- ^ animBlast
        -> Maybe Int -- ^ mMyId
+       -> MatchState 
        -> Picture
-render assets gameMap snapshot effects animRapid animBlast mMyId =
+render assets gameMap snapshot effects animRapid animBlast mMyId matchState =
   let
     (ourPlayer, otherPlayers) = 
       case mMyId of
@@ -65,8 +67,9 @@ render assets gameMap snapshot effects animRapid animBlast mMyId =
     
     mapPic = drawMap assets gameMap
     
-    -- Truyền 'assets' vào renderHUD
-    hudPic = maybe Blank (renderHUD assets) ourPlayer
+    hudPic = case (ourPlayer, matchState) of
+               (Just p, InProgress) -> renderHUD assets p
+               _ -> Blank
                
     ourPlayerPic = case ourPlayer of
                      Just p  -> 
@@ -95,13 +98,24 @@ render assets gameMap snapshot effects animRapid animBlast mMyId =
     visionLayer =
       Rotate (radToDeg playerBodyAngle) $ 
       Scale 1.2 1.2 (resVignetteMask assets)
-      
+    
+    -- *** ĐÂY LÀ PHẦN ĐÃ SỬA LỖI CÚ PHÁP ***
+    uiOverlay = case matchState of
+      Waiting -> centeredText white "Waiting for opponent..."
+      InProgress -> Blank
+      GameOver mWinnerId ->
+        case (mMyId, mWinnerId) of
+          (Just myId, Just winnerId) | myId == winnerId -> centeredText green "YOU WIN!"
+          (Just _, Nothing) -> centeredText yellow "DRAW!"
+          _ -> centeredText red "YOU LOSE!"
+
   in
     Pictures
       [ 
         Translate (-camX) (-camY) worldLayer
       , visionLayer
-      , hudPic 
+      , hudPic
+      , uiOverlay 
       ]
   
 drawOurPlayer :: Resources -> PlayerState -> Animation -> Picture
@@ -174,3 +188,13 @@ drawEffect _ effect =
 
 radToDeg :: Float -> Float
 radToDeg r = r * 180 / pi
+
+centeredText :: Color -> String -> Picture
+centeredText col str =
+  let
+    textWidth = fromIntegral (length str) * 20 
+  in
+    Translate (- (textWidth / 2)) 0
+    $ Scale 0.4 0.4
+    $ Color col
+    $ Text str
