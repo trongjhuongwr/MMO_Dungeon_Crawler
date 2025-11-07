@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Redundant bracket" #-}
 module UI.Screens
   ( renderLogin
   , renderMenu
@@ -31,11 +33,13 @@ drawText (x, y) size text = Translate x y $ Scale size size $ Color white $ Text
 renderLogin :: String -> String -> Picture
 renderLogin username status = Pictures
   [ Color black $ rectangleSolid 800 600 -- Background
-  , drawText (-100, 50) 0.3 "LOGIN"
-  , drawText (-150, 0) 0.2 "Username:"
-  , drawButton (0, -20) username -- Ô nhập liệu
-  , drawButton (0, -80) "Login"
-  , drawText (-100, -150) 0.1 status
+  , drawText (-80, 150) 0.3 "LOGIN"
+  , drawText (-200, 40) 0.2 "Username:"
+  , drawButton (80, 50) username -- Ô nhập liệu
+  , drawText (-200, -40) 0.2 "Password:"
+  , drawButton (80, -30) "********" -- Ô nhập liệu mật khẩu
+  , drawButton (-20, -150) "Login"
+  , drawText (-80, -200) 0.1 status
   ]
 
 renderMenu :: Picture

@@ -1,4 +1,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use unless" #-}
+{-# HLINT ignore "Use newtype instead of data" #-}
+{-# HLINT ignore "Use camelCase" #-}
+{-# HLINT ignore "Redundant bracket" #-}
 module Main where
 
 import Network.Socket hiding (recv, SendTo, RecvFrom)
@@ -31,6 +36,7 @@ import UI.Screens
 import Types.Tank (TankType(..))
 import Data.Maybe (Maybe(..), isJust, fromJust)
 import Data.List (find)
+import Data.Int (Int64)
 
 -- ===================================================================
 -- KIỂU DỮ LIỆU STATE MÁY
@@ -141,7 +147,8 @@ connectTcp host port = do
   sockTCP <- socket (addrFamily addrTCP) (addrSocketType addrTCP) (addrProtocol addrTCP)
   connect sockTCP (addrAddress addrTCP)
   h <- socketToHandle sockTCP ReadWriteMode
-  hSetBuffering h (BlockBuffering (Just 8192)) -- Dùng buffer
+  -- hSetBuffering h (BlockBuffering (Just 8192)) -- Dùng buffer <-- DÒNG NÀY GÂY LỖI
+  hSetBuffering h NoBuffering -- <<< SỬA THÀNH DÒNG NÀY
   
   -- UDP
   sockUDP <- socket AF_INET Datagram defaultProtocol
@@ -173,62 +180,76 @@ tcpListenLoop h mvar = forever $ do
   if LBS.null lazyMsg
   then putStrLn "[TCP] Server disconnected." >> fail "Server disconnected"
   else do
-    let pkt = decode lazyMsg :: ServerTcpPacket
-    putStrLn $ "[TCP] Received: " ++ show pkt
+    -- SỬA TỪ ĐÂY: Dùng decodeOrFail để tránh crash
+    let decodeResult = decodeOrFail lazyMsg :: Either (LBS.ByteString, Int64, String) (LBS.ByteString, Int64, ServerTcpPacket)
     
-    modifyMVar_ mvar $ \cState -> do
-      case pkt of
-        STP_LoginResult success pid msg ->
-          if success
-          then pure cState { csMyId = pid, csState = S_Menu }
-          else pure cState { csState = S_Login (LoginData "" msg) }
-          
-        STP_RoomUpdate roomId pInfos ->
-          let myInfo = find (\p -> piId p == csMyId cState) pInfos
-              myTank = myInfo >>= piSelectedTank
-              myReady = maybe False piIsReady myInfo
-              lobbyData = LobbyData roomId pInfos myTank myReady
-          in pure cState { csState = S_Lobby lobbyData }
-
-        STP_GameStarting -> do
-          -- Tải map pvp (tạm hardcode)
-          eMapData <- loadMapFromFile "client/assets/maps/pvp.json" --
-          case eMapData of
-            Left err -> putStrLn ("Failed to load map: " ++ err) >> pure cState
-            Right (gmap, _) -> do
-              -- Lấy tank đã chọn
-              let (S_Lobby lobbyData) = csState cState
-              let myTank = fromJust $ ldMyTank lobbyData
-              
-              let assets = csResources cState
-              let animR = (dummyAnim assets) { animFrames = resTurretFramesRapid assets }
-              let animB = (dummyAnim assets) { animFrames = resTurretFramesBlast assets }
-              
-              let newInGameState = InGameState
-                    { igsKeys = Set.empty
-                    , igsMousePos = (0, 0)
-                    , igsWorld = initialWorldSnapshot
-                    , igsGameMap = gmap
-                    , igsDidFire = False
-                    , igsEffects = []
-                    , igsNextEffectId = 0
-                    , igsTurretAnimRapid = animR
-                    , igsTurretAnimBlast = animB
-                    , igsMyId = csMyId cState
-                    , igsMatchState = Waiting -- Server sẽ cập nhật qua UDP
-                    }
-              
-              -- GỬI UDP HANDSHAKE
-              sendUdpPacket (csUdpSocket cState) (csServerAddr cState) (CUP_Handshake (csMyId cState))
-              
-              pure cState { csState = S_InGame newInGameState }
-          
-        STP_Kicked msg ->
-          -- Bị đá, quay về màn hình Login
-          pure cState { csState = S_Login (LoginData "" msg) }
+    case decodeResult of
+      Left (_, _, errMsg) -> do
+        -- Lỗi (thường là do đọc dở gói tin). Log và bỏ qua.
+        putStrLn $ "[TCP] Decode Error: " ++ errMsg ++ ". Discarding partial packet."
+        pure () -- Lặp lại và đọc tiếp
         
-        STP_ShowMenu ->
-          pure cState { csState = S_Menu }
+      Right (remaining, _, pkt) -> do
+        -- Xử lý gói tin thành công
+        putStrLn $ "[TCP] Received: " ++ show pkt
+        modifyMVar_ mvar $ \cState -> do
+          case pkt of
+            STP_LoginResult success pid msg ->
+              if success
+              then pure cState { csMyId = pid, csState = S_Menu }
+              else pure cState { csState = S_Login (LoginData "" msg) }
+              
+            STP_RoomUpdate roomId pInfos ->
+              let myInfo = find (\p -> piId p == csMyId cState) pInfos
+                  myTank = myInfo >>= piSelectedTank
+                  myReady = maybe False piIsReady myInfo
+                  lobbyData = LobbyData roomId pInfos myTank myReady
+              in pure cState { csState = S_Lobby lobbyData }
+
+            STP_GameStarting -> do
+              -- Tải map pvp (tạm hardcode)
+              eMapData <- loadMapFromFile "client/assets/maps/pvp.json" --
+              case eMapData of
+                Left err -> putStrLn ("Failed to load map: " ++ err) >> pure cState
+                Right (gmap, _) -> do
+                  -- Lấy tank đã chọn
+                  let (S_Lobby lobbyData) = csState cState
+                  let myTank = fromJust $ ldMyTank lobbyData
+                  
+                  let assets = csResources cState
+                  let animR = (dummyAnim assets) { animFrames = resTurretFramesRapid assets }
+                  let animB = (dummyAnim assets) { animFrames = resTurretFramesBlast assets }
+                  
+                  let newInGameState = InGameState
+                        { igsKeys = Set.empty
+                        , igsMousePos = (0, 0)
+                        , igsWorld = initialWorldSnapshot
+                        , igsGameMap = gmap
+                        , igsDidFire = False
+                        , igsEffects = []
+                        , igsNextEffectId = 0
+                        , igsTurretAnimRapid = animR
+                        , igsTurretAnimBlast = animB
+                        , igsMyId = csMyId cState
+                        , igsMatchState = Waiting -- Server sẽ cập nhật qua UDP
+                        }
+                  
+                  -- GỬI UDP HANDSHAKE
+                  sendUdpPacket (csUdpSocket cState) (csServerAddr cState) (CUP_Handshake (csMyId cState))
+                  
+                  pure cState { csState = S_InGame newInGameState }
+              
+            STP_Kicked msg ->
+              -- Bị đá, quay về màn hình Login
+              pure cState { csState = S_Login (LoginData "" msg) }
+            
+            STP_ShowMenu ->
+              pure cState { csState = S_Menu }
+        
+        -- Cảnh báo nếu giao thức bị lệch
+        when (not (LBS.null remaining)) $ do
+          putStrLn $ "[TCP] Warning: " ++ show (LBS.length remaining) ++ " bytes remaining in TCP buffer. Protocol might be out of sync."
+    -- KẾT THÚC SỬA
 
 -- Lắng nghe gói UDP từ Server (Trong Game)
 udpListenLoop :: Socket -> MVar ClientState -> IO ()
@@ -355,7 +376,6 @@ handleInputMenu event cState@(ClientState { csTcpHandle = h }) =
       then pure cState { csState = S_RoomSelection "" }
       else pure cState
     _ -> pure cState
-handleInputMenu _ cState = pure cState
 
 -- === ROOM SELECTION ===
 handleInputRoomSelection :: Event -> ClientState -> IO ClientState
@@ -407,7 +427,6 @@ handleInputPostGame event cState@(ClientState { csTcpHandle = h }) =
           sendTcpPacket h CTP_LeaveRoom
           pure cState { csState = S_Menu } -- Quay về Menu
     _ -> pure cState
-handleInputPostGame _ cState = pure cState
 
 -- ===================================================================
 -- HÀM LOGIC GAME (TỪ CODE CŨ)
