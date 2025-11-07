@@ -1,6 +1,8 @@
-module Core.Types where
+module Core.Types
+  ( module Core.Types -- Export tất cả mọi thứ
+  ) where
 
-import Network.Socket (SockAddr)
+import Network.Socket (SockAddr, Socket)
 import Types.Player (PlayerCommand, PlayerState(..))
 import Types.Common (Vec2(..))
 import Types.Bullet (BulletState(..))
@@ -9,32 +11,39 @@ import Types.Map (GameMap)
 import Types.Tank (TankType) 
 import qualified Data.Map as Map  
 import Types.MatchState (MatchState(..))
+import Network.Packet (PlayerInfo) 
+import System.IO (Handle)
+import Control.Concurrent.MVar (MVar)
 
-data GameState = GameState
-  { gsTick     :: Int
-  , gsCommands :: [Command]
-  , gsPlayers  :: Map.Map SockAddr PlayerState
-  , gsEnemies  :: [EnemyState]
-  , gsBullets  :: [BulletState]
-  , gsNextId   :: Int 
-  , gsMap      :: GameMap
-  , gsSpawns   :: [Vec2]
-  , gsMatchState :: MatchState
+-- ================================================================
+-- TRẠNG THÁI CỦA MỘT TRẬN ĐẤU (GAMEPLAY)
+-- ================================================================
+
+data RoomGameState = RoomGameState
+  { rgsTick     :: Int
+  , rgsCommands :: [Command]
+  , rgsPlayers  :: Map.Map SockAddr PlayerState 
+  , rgsEnemies  :: [EnemyState]
+  , rgsBullets  :: [BulletState]
+  , rgsNextId   :: Int 
+  , rgsMap      :: GameMap
+  , rgsSpawns   :: [Vec2]
+  , rgsMatchState :: MatchState
   }
 
 data Command = Command SockAddr PlayerCommand
 
-initialGameState :: GameMap -> [Vec2] -> GameState
-initialGameState loadedMap spawnPoints = GameState
-  { gsTick = 0
-  , gsCommands = []
-  , gsPlayers = Map.empty
-  , gsEnemies = [] 
-  , gsBullets = []
-  , gsNextId = 1
-  , gsMap = loadedMap     
-  , gsSpawns = spawnPoints
-  , gsMatchState = Waiting
+initialRoomGameState :: GameMap -> [Vec2] -> RoomGameState
+initialRoomGameState loadedMap spawnPoints = RoomGameState
+  { rgsTick = 0
+  , rgsCommands = []
+  , rgsPlayers = Map.empty
+  , rgsEnemies = [] 
+  , rgsBullets = []
+  , rgsNextId = 1
+  , rgsMap = loadedMap     
+  , rgsSpawns = spawnPoints
+  , rgsMatchState = Waiting
   }
 
 initialPlayerState :: Vec2 -> Int -> TankType -> PlayerState
@@ -47,4 +56,39 @@ initialPlayerState spawnPos playerId tankType = PlayerState
   , psHealth = 100
   , psTankType = tankType
   , psLives = 3
+  }
+
+-- ================================================================
+-- TRẠNG THÁI TOÀN CỤC CỦA SERVER (QUẢN LÝ LOBBY)
+-- ================================================================
+
+data PlayerClient = PlayerClient
+  { pcHandle :: Handle     
+  , pcInfo   :: PlayerInfo 
+  , pcUdpAddr :: Maybe SockAddr 
+  }
+
+data Room = Room
+  { roomMsgId   :: String 
+  , roomPlayers :: Map.Map Int PlayerClient 
+  , roomGame    :: Maybe (MVar RoomGameState) 
+  }
+
+data ServerState = ServerState
+  { ssClients :: Map.Map Int PlayerClient 
+  , ssRooms   :: Map.Map String Room      
+  , ssNextPlayerId :: Int
+  , ssUdpSocket :: Socket 
+  , ssMap       :: GameMap 
+  , ssSpawns    :: [Vec2]    
+  }
+
+initialServerState :: Socket -> GameMap -> [Vec2] -> ServerState
+initialServerState sock gmap spawns = ServerState
+  { ssClients = Map.empty
+  , ssRooms = Map.empty
+  , ssNextPlayerId = 1
+  , ssUdpSocket = sock
+  , ssMap = gmap
+  , ssSpawns = spawns
   }

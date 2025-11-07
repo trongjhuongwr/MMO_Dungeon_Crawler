@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.37.0.
+-- This file has been generated from package.yaml by hpack version 0.38.1.
 --
 -- see: https://github.com/sol/hpack
 
@@ -30,6 +30,7 @@ library
       Renderer.Resources
       Systems.MapLoader
       UI.HUD
+      UI.Screens
   other-modules:
       Paths_client
   hs-source-dirs:
@@ -59,6 +60,7 @@ executable mmo-client
       Renderer.Resources
       Systems.MapLoader
       UI.HUD
+      UI.Screens
       Paths_client
   hs-source-dirs:
       src

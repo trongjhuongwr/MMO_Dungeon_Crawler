@@ -1,8 +1,9 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Eta reduce" #-}
+
 module Systems.CombatSystem (spawnNewBullets, resolveCollisions) where
 
-import Core.Types (GameState(..), Command(..))
+import Core.Types (RoomGameState(..), Command(..)) -- << SỬA DÒNG NÀY
 import Types.Player (PlayerState(..), PlayerCommand(..))
 import Types.Bullet (BulletState(..))
 import qualified Types.Bullet as Bullet
@@ -20,18 +21,20 @@ bulletSpeed = 300.0
 bulletLifetime :: Float
 bulletLifetime = 1.0
 
-resolveCollisions :: GameState -> GameState
+-- << SỬA CHỮ KÝ HÀM
+resolveCollisions :: RoomGameState -> RoomGameState
 resolveCollisions = checkCollisions
 
-spawnNewBullets :: GameState -> GameState
+-- << SỬA CHỮ KÝ HÀM
+spawnNewBullets :: RoomGameState -> RoomGameState
 spawnNewBullets gs =
   let
     (gsWithNewBullets, newNextId) =
-      go (gsCommands gs) (gsPlayers gs) (gsNextId gs) gs
+      go (rgsCommands gs) (rgsPlayers gs) (rgsNextId gs) gs -- << SỬA
   in
-    gsWithNewBullets { gsNextId = newNextId }
+    gsWithNewBullets { rgsNextId = newNextId }
   where
-    go :: [Command] -> Map.Map SockAddr PlayerState -> Int -> GameState -> (GameState, Int)
+    go :: [Command] -> Map.Map SockAddr PlayerState -> Int -> RoomGameState -> (RoomGameState, Int) -- << SỬA
     go [] _ nextId currentGs = (currentGs, nextId)
     go (Command addr (PlayerCommand _ _ False) : cmds) players nextId currentGs =
       go cmds players nextId currentGs
@@ -57,17 +60,18 @@ spawnNewBullets gs =
               , bsLifetime = bulletLifetime
               }
             
-            newGameState = currentGs { gsBullets = newBullet : gsBullets currentGs }
+            newGameState = currentGs { rgsBullets = newBullet : rgsBullets currentGs } -- << SỬA
             newNextId = nextId + 1
           in
             go cmds players newNextId newGameState
 
-checkCollisions :: GameState -> GameState
+-- << SỬA CHỮ KÝ HÀM
+checkCollisions :: RoomGameState -> RoomGameState
 checkCollisions gs =
   let
-    bullets = gsBullets gs
-    enemies = gsEnemies gs
-    players = gsPlayers gs
+    bullets = rgsBullets gs -- << SỬA
+    enemies = rgsEnemies gs -- << SỬA
+    players = rgsPlayers gs -- << SỬA
     
     (collidedBulletIds_Enemies, collidedEnemyIds) = findEnemyCollisions bullets enemies
     
@@ -79,9 +83,9 @@ checkCollisions gs =
     remainingEnemies = map (damageEnemy collidedEnemyIds) enemies
 
   in
-    gs { gsBullets = remainingBullets
-       , gsEnemies = remainingEnemies 
-       , gsPlayers = updatedPlayersMap 
+    gs { rgsBullets = remainingBullets -- << SỬA
+       , rgsEnemies = remainingEnemies -- << SỬA
+       , rgsPlayers = updatedPlayersMap -- << SỬA
        }
 
 damageEnemy :: [Int] -> EnemyState -> EnemyState
@@ -144,7 +148,7 @@ damagePlayers damageList playersMap =
       
     damagePlayer :: Int -> Bullet.BulletType -> PlayerState -> PlayerState
     damagePlayer attackedPlayerId bulletType player =
-      if psId player /= attackedPlayerId || psHealth player <= 0 -- Nếu không phải player bị bắn, HOẶC player đã chết, bỏ qua
+      if psId player /= attackedPlayerId || psHealth player <= 0 
         then player 
         else
           let damage = case bulletType of
@@ -153,7 +157,6 @@ damagePlayers damageList playersMap =
               newHealth = psHealth player - damage
           in 
             if newHealth <= 0
-              -- Hết máu -> Trừ 1 mạng, không để máu âm
               then player { psHealth = 0, psLives = psLives player - 1 }
               else player { psHealth = newHealth }
 
