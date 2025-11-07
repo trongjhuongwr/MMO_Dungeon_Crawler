@@ -142,17 +142,20 @@ main = withSocketsDo $ do
 
 connectTcp :: HostName -> PortNumber -> IO (Handle, Socket, SockAddr)
 connectTcp host port = do
-  -- TCP
-  addrTCP <- head <$> getAddrInfo (Just defaultHints { addrSocketType = Stream }) (Just host) (Just $ show port)
+  -- TCP (SỬA ĐỔI DÒNG NÀY)
+  addrTCP <- head <$> getAddrInfo (Just defaultHints { addrSocketType = Stream, addrFamily = AF_INET }) (Just host) (Just $ show port)
   sockTCP <- socket (addrFamily addrTCP) (addrSocketType addrTCP) (addrProtocol addrTCP)
+  
+  setSocketOption sockTCP NoDelay 1 -- <--- THÊM DÒNG NÀY
+  
   connect sockTCP (addrAddress addrTCP)
   h <- socketToHandle sockTCP ReadWriteMode
-  hSetBuffering h NoBuffering -- Giữ nguyên NoBuffering
+  hSetBuffering h NoBuffering
   
-  -- UDP
-  sockUDP <- socket AF_INET Datagram defaultProtocol
-  bind sockUDP (SockAddrInet 0 0) -- Ràng buộc vào một cổng ngẫu nhiên
-  serverAddrUDP <- head <$> getAddrInfo (Just defaultHints { addrSocketType = Datagram }) (Just host) (Just "8888")
+  -- UDP (SỬA ĐỔI DÒNG NÀY)
+  sockUDP <- socket AF_INET Datagram defaultProtocol -- (Dòng này đã đúng AF_INET)
+  bind sockUDP (SockAddrInet 0 0) 
+  serverAddrUDP <- head <$> getAddrInfo (Just defaultHints { addrSocketType = Datagram, addrFamily = AF_INET }) (Just host) (Just "8888")
   
   return (h, sockUDP, addrAddress serverAddrUDP)
 

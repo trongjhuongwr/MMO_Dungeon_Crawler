@@ -56,7 +56,7 @@ startTcpServer serverStateRef = withSocketsDo $ do
       return ()
   where
     resolve port = do
-      let hints = defaultHints { addrFlags = [AI_PASSIVE], addrSocketType = Stream }
+      let hints = defaultHints { addrFlags = [AI_PASSIVE], addrSocketType = Stream, addrFamily = AF_INET }
       head <$> getAddrInfo (Just hints) Nothing (Just port)
     open addr = do
       sock <- socket (addrFamily addr) (addrSocketType addr) (addrProtocol addr)
@@ -67,6 +67,7 @@ startTcpServer serverStateRef = withSocketsDo $ do
 
 handleClient :: Socket -> SockAddr -> MVar ServerState -> IO ()
 handleClient sock addr serverStateRef = do
+  setSocketOption sock NoDelay 1 -- <--- THÊM DÒNG NÀY
   h <- socketToHandle sock ReadWriteMode
   hSetBuffering h NoBuffering -- Rất quan trọng
   
