@@ -26,6 +26,7 @@ import Network.Packet
 import GameLoop (gameLoop) 
 import Types.MatchState (MatchState(..)) 
 import Types.Common (Vec2(..)) 
+import qualified Core.Settings as Settings
 import qualified Utils.Random as Rnd (getRandomNumber)
 import qualified Data.ByteString as BS 
 import qualified Data.ByteString as BS (hPut)
@@ -49,7 +50,7 @@ generateRoomId = do
   pure $ take 4 (show (abs num `mod` 10000 + 10000))
 
 tcpPort :: PortNumber
-tcpPort = 4000 
+tcpPort = Settings.getServerTcpPort
 
 startTcpServer :: MVar ServerState -> IO ()
 startTcpServer serverStateRef = withSocketsDo $ do

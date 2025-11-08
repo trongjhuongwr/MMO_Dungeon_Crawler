@@ -1,8 +1,16 @@
 {-# LANGUAGE DeriveGeneric #-}
 
--- SỬA DÒNG NÀY:
 module Network.Packet
-  ( module Network.Packet -- Export tất cả mọi thứ
+  ( -- Client -> Server
+    ClientTcpPacket(..)
+  , ClientUdpPacket(..)
+    -- Server -> Client
+  , ServerTcpPacket(..)
+  , ServerUdpPacket(..)
+    -- Shared types used in packets
+  , WorldSnapshot(..)
+  , PlayerInfo(..)
+  , PlayerCommand(..)
   ) where
 
 import Data.Binary (Binary)

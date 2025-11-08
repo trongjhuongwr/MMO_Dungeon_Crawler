@@ -20,10 +20,36 @@ dependencies:
   - shared
   - JuicyPixels
   - aeson
+  - filepath
 
 # Phần thư viện của server (chứa logic game)
 library:
   source-dirs: src
+  exposed-modules:
+    - Core.Config
+    - Core.Logger
+    - Core.Settings
+    - Core.Types
+    - Network.TCPServer
+    - Network.UDPServer
+    - Network.SessionManager
+    - Network.Protocol
+    - Network.PacketParser
+    - Systems.MapLoader
+    - Systems.AISystem
+    - Systems.CombatSystem
+    - Systems.EffectSystem
+    - Systems.EntitySystem
+    - Systems.ItemSystem
+    - Systems.PartySystem
+    - Systems.PhysicsSystem
+    - Systems.SkillSystem
+    - Systems.SyncSystem
+    - Data.Database
+    - Data.Queries.PlayerQuery
+    - Handlers.LoginHandler
+    - Utils.Random
+    - GameLoop
 
 # Phần ứng dụng chạy được (entry point)
 executables:

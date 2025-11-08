@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.38.1.
+-- This file has been generated from package.yaml by hpack version 0.37.0.
 --
 -- see: https://github.com/sol/hpack
 
@@ -25,10 +25,15 @@ library
       Core.Animation
       Core.Effect
       Core.Renderer
+      Events
+      Game
       Input
       Main
+      Network.Client
       Renderer.Resources
+      Settings
       Systems.MapLoader
+      Types
       UI.HUD
       UI.Screens
   other-modules:
@@ -43,6 +48,7 @@ library
     , binary
     , bytestring
     , containers
+    , filepath
     , gloss
     , gloss-juicy
     , hspec
@@ -56,9 +62,14 @@ executable mmo-client
       Core.Animation
       Core.Effect
       Core.Renderer
+      Events
+      Game
       Input
+      Network.Client
       Renderer.Resources
+      Settings
       Systems.MapLoader
+      Types
       UI.HUD
       UI.Screens
       Paths_client
@@ -74,6 +85,7 @@ executable mmo-client
     , bytestring
     , client
     , containers
+    , filepath
     , gloss
     , gloss-juicy
     , hspec
@@ -98,6 +110,7 @@ test-suite client-test
     , bytestring
     , client
     , containers
+    , filepath
     , gloss
     , gloss-juicy
     , hspec
