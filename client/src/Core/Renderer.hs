@@ -87,16 +87,19 @@ render assets gameMap snapshot effects animRapid animBlast mMyId matchState =
                      Nothing -> (0, 0)
                      
     playerBodyAngle = maybe 0.0 psBodyAngle ourPlayer
+    playerTurretAngle = maybe 0.0 psTurretAngle ourPlayer
                         
     worldLayer = Pictures $
       [ mapPic ] ++
+      [ visionLayer ] ++
       ourPlayerPic ++ otherPlayerPics ++
       map drawEnemy (wsEnemies snapshot) ++
       map (drawBullet assets) (wsBullets snapshot) ++
       map (drawEffect assets) effects
       
     visionLayer =
-      Rotate (radToDeg playerBodyAngle) $ 
+      Translate camX camY $
+      Rotate (radToDeg playerTurretAngle) $
       Scale 1.2 1.2 (resVignetteMask assets)
     
     -- *** ĐÂY LÀ PHẦN ĐÃ SỬA LỖI CÚ PHÁP ***
@@ -113,7 +116,6 @@ render assets gameMap snapshot effects animRapid animBlast mMyId matchState =
     Pictures
       [ 
         Translate (-camX) (-camY) worldLayer
-      , visionLayer
       , hudPic
       , uiOverlay 
       ]
