@@ -22,6 +22,7 @@ dependencies:
   - containers
   - array
   - aeson
+  - filepath
 
 # Thêm dependency định nghĩa cho test suite
   - hspec

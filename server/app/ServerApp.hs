@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Redundant $" #-}
-module ServerApp (runServer) where -- CHỈ EXPORT runServer
+module ServerApp (runServer) where 
 
 import Control.Concurrent (forkIO, threadDelay, MVar, newMVar)
 import Control.Monad (forever)
@@ -10,11 +10,12 @@ import Data.List (find)
 import Data.Maybe (Maybe(..)) 
 import System.IO (hSetEncoding, stdout, stderr, utf8) 
 
-import Core.Types -- Import tất cả type mới
+import Core.Types 
 import Network.UDPServer (udpListenLoop)
 import Network.TCPServer (startTcpServer) 
 import Systems.MapLoader (loadMapFromFile) 
 import Types.Common (Vec2(..))
+import qualified Core.Settings as Settings
 
 runServer :: IO ()
 runServer = withSocketsDo $ do
@@ -23,7 +24,7 @@ runServer = withSocketsDo $ do
 
   putStrLn "Starting MMO Dungeon Crawler server..."
   
-  let mapToLoad = "server/assets/maps/pvp.json" --
+  mapToLoad <- Settings.getMapPath
   
   putStrLn $ "Loading map: " ++ mapToLoad
   eMapData <- loadMapFromFile mapToLoad

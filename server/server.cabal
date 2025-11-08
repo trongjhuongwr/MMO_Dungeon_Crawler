@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.38.1.
+-- This file has been generated from package.yaml by hpack version 0.37.0.
 --
 -- see: https://github.com/sol/hpack
 
@@ -24,27 +24,28 @@ library
   exposed-modules:
       Core.Config
       Core.Logger
+      Core.Settings
       Core.Types
-      Data.Database
-      Data.Queries.PlayerQuery
-      GameLoop
-      Handlers.LoginHandler
-      Network.PacketParser
-      Network.Protocol
-      Network.SessionManager
       Network.TCPServer
       Network.UDPServer
+      Network.SessionManager
+      Network.Protocol
+      Network.PacketParser
+      Systems.MapLoader
       Systems.AISystem
       Systems.CombatSystem
       Systems.EffectSystem
       Systems.EntitySystem
       Systems.ItemSystem
-      Systems.MapLoader
       Systems.PartySystem
       Systems.PhysicsSystem
       Systems.SkillSystem
       Systems.SyncSystem
+      Data.Database
+      Data.Queries.PlayerQuery
+      Handlers.LoginHandler
       Utils.Random
+      GameLoop
   other-modules:
       Paths_server
   hs-source-dirs:
@@ -57,6 +58,7 @@ library
     , binary
     , bytestring
     , containers
+    , filepath
     , network
     , shared
   default-language: Haskell2010
@@ -78,6 +80,7 @@ executable mmo-server
     , binary
     , bytestring
     , containers
+    , filepath
     , network
     , server
     , shared

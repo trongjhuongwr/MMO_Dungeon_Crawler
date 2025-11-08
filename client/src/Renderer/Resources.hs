@@ -12,6 +12,8 @@ import qualified Data.Map.Strict as Map
 import Control.Monad (forM)
 import Data.Maybe (catMaybes, mapMaybe, fromMaybe)
 import Codec.Picture (readImage, DynamicImage(..), convertRGBA8, pixelAt, generateImage)
+import qualified Settings as Settings
+import qualified Data.Aeson.Encoding as Settings
 
 loadSpriteSheet :: DynamicImage -> Int -> Int -> Int -> [Picture]
 loadSpriteSheet dynImg frameWidth frameHeight frameCount =
@@ -53,45 +55,45 @@ data Resources = Resources
   }
 
 tileTypeToPath :: TileType -> Maybe FilePath
-tileTypeToPath tt = case tt of
-  Floor_00 -> Just "client/assets/textures/map/floors/floor_00.png"
-  Floor_01 -> Just "client/assets/textures/map/floors/floor_01.png"
-  Floor_02 -> Just "client/assets/textures/map/floors/floor_02.png"
-  Floor_03 -> Just "client/assets/textures/map/floors/floor_03.png"
-  Floor_04 -> Just "client/assets/textures/map/floors/floor_04.png"
-  Floor_05 -> Just "client/assets/textures/map/floors/floor_05.png"
-  Floor_06 -> Just "client/assets/textures/map/floors/floor_06.png"
-  Floor_07 -> Just "client/assets/textures/map/floors/floor_07.png"
-  Floor_08 -> Just "client/assets/textures/map/floors/floor_08.png"
-  Floor_09 -> Just "client/assets/textures/map/floors/floor_09.png"
-  Floor_10 -> Just "client/assets/textures/map/floors/floor_10.png"
-  Floor_11 -> Just "client/assets/textures/map/floors/floor_11.png"
-  Floor_Edge_DL -> Just "client/assets/textures/map/floors/floor_edge_dl.png"
-  Floor_Edge_Down_00 -> Just "client/assets/textures/map/floors/floor_edge_down_00.png"
-  Floor_Edge_Down_01 -> Just "client/assets/textures/map/floors/floor_edge_down_01.png"
-  Floor_Edge_DR -> Just "client/assets/textures/map/floors/floor_edge_dr.png"
-  Floor_Edge_Left -> Just "client/assets/textures/map/floors/floor_edge_left.png"
-  Floor_Edge_Right -> Just "client/assets/textures/map/floors/floor_edge_right.png"
-  Floor_Edge_TL -> Just "client/assets/textures/map/floors/floor_edge_tl.png"
-  Floor_Edge_Top_00 -> Just "client/assets/textures/map/floors/floor_edge_top_00.png"
-  Floor_Edge_Top_01 -> Just "client/assets/textures/map/floors/floor_edge_top_01.png"
-  Floor_Edge_TR -> Just "client/assets/textures/map/floors/floor_edge_tr.png"
-  Wall_Back_00 -> Just "client/assets/textures/map/walls/wall_back_00.png"
-  Wall_Back_01 -> Just "client/assets/textures/map/walls/wall_back_01.png"
-  Wall_Front_00 -> Just "client/assets/textures/map/walls/wall_front_00.png"
-  Wall_Front_01 -> Just "client/assets/textures/map/walls/wall_front_01.png"
-  Wall_Front_02 -> Just "client/assets/textures/map/walls/wall_front_02.png"
-  Wall_Left_00 -> Just "client/assets/textures/map/walls/wall_left_00.png"
-  Wall_Left_01 -> Just "client/assets/textures/map/walls/wall_left_01.png"
-  Wall_Left_02 -> Just "client/assets/textures/map/walls/wall_left_02.png"
-  Wall_Left_03 -> Just "client/assets/textures/map/walls/wall_left_03.png"
-  Wall_Left_End -> Just "client/assets/textures/map/walls/wall_left_end.png"
-  Wall_Left_Start -> Just "client/assets/textures/map/walls/wall_left_start.png"
-  Wall_Right_00 -> Just "client/assets/textures/map/walls/wall_right_00.png"
-  Wall_Right_01 -> Just "client/assets/textures/map/walls/wall_right_01.png"
-  Wall_Right_02 -> Just "client/assets/textures/map/walls/wall_right_02.png"
-  Wall_Right_End -> Just "client/assets/textures/map/walls/wall_right_end.png"
-  Wall_Right_Start -> Just "client/assets/textures/map/walls/wall_right_start.png"
+tileTypeToPath tt = fmap Settings.texture $ case tt of
+  Floor_00 -> Just "map/floors/floor_00.png"
+  Floor_01 -> Just "map/floors/floor_01.png"
+  Floor_02 -> Just "map/floors/floor_02.png"
+  Floor_03 -> Just "map/floors/floor_03.png"
+  Floor_04 -> Just "map/floors/floor_04.png"
+  Floor_05 -> Just "map/floors/floor_05.png"
+  Floor_06 -> Just "map/floors/floor_06.png"
+  Floor_07 -> Just "map/floors/floor_07.png"
+  Floor_08 -> Just "map/floors/floor_08.png"
+  Floor_09 -> Just "map/floors/floor_09.png"
+  Floor_10 -> Just "map/floors/floor_10.png"
+  Floor_11 -> Just "map/floors/floor_11.png"
+  Floor_Edge_DL -> Just "map/floors/floor_edge_dl.png"
+  Floor_Edge_Down_00 -> Just "map/floors/floor_edge_down_00.png"
+  Floor_Edge_Down_01 -> Just "map/floors/floor_edge_down_01.png"
+  Floor_Edge_DR -> Just "map/floors/floor_edge_dr.png"
+  Floor_Edge_Left -> Just "map/floors/floor_edge_left.png"
+  Floor_Edge_Right -> Just "map/floors/floor_edge_right.png"
+  Floor_Edge_TL -> Just "map/floors/floor_edge_tl.png"
+  Floor_Edge_Top_00 -> Just "map/floors/floor_edge_top_00.png"
+  Floor_Edge_Top_01 -> Just "map/floors/floor_edge_top_01.png"
+  Floor_Edge_TR -> Just "map/floors/floor_edge_tr.png"
+  Wall_Back_00 -> Just "map/walls/wall_back_00.png"
+  Wall_Back_01 -> Just "map/walls/wall_back_01.png"
+  Wall_Front_00 -> Just "map/walls/wall_front_00.png"
+  Wall_Front_01 -> Just "map/walls/wall_front_01.png"
+  Wall_Front_02 -> Just "map/walls/wall_front_02.png"
+  Wall_Left_00 -> Just "map/walls/wall_left_00.png"
+  Wall_Left_01 -> Just "map/walls/wall_left_01.png"
+  Wall_Left_02 -> Just "map/walls/wall_left_02.png"
+  Wall_Left_03 -> Just "map/walls/wall_left_03.png"
+  Wall_Left_End -> Just "map/walls/wall_left_end.png"
+  Wall_Left_Start -> Just "map/walls/wall_left_start.png"
+  Wall_Right_00 -> Just "map/walls/wall_right_00.png"
+  Wall_Right_01 -> Just "map/walls/wall_right_01.png"
+  Wall_Right_02 -> Just "map/walls/wall_right_02.png"
+  Wall_Right_End -> Just "map/walls/wall_right_end.png"
+  Wall_Right_Start -> Just "map/walls/wall_right_start.png"
   Empty -> Nothing
 
 
@@ -99,21 +101,21 @@ tileTypeToPath tt = case tt of
 loadResources :: IO (Either String Resources)
 loadResources = do
   -- Load Rapid Tank
-  mTankBodyRapid <- loadSprite "client/assets/textures/tanks/rapid_tank/body.png" (0, 0) (128, 128)
-  eTurretImgRapid <- readImage "client/assets/textures/tanks/rapid_tank/turret.png" 
-  mBulletNormal <- loadJuicyPNG "client/assets/textures/projectiles/bullet_normal.png"
-  
+  mTankBodyRapid <- loadSprite (Settings.tank "rapid_tank" "body.png") (0, 0) (128, 128)
+  eTurretImgRapid <- readImage (Settings.tank "rapid_tank" "turret.png")
+  mBulletNormal <- loadJuicyPNG (Settings.projectile "bullet_normal.png")
+
   -- Load Blast Tank
-  mTankBodyBlast <- loadSprite "client/assets/textures/tanks/blast_tank/body.png" (0, 0) (128, 128)
-  eTurretImgBlast <- readImage "client/assets/textures/tanks/blast_tank/turret.png" 
-  mBulletBlast <- loadJuicyPNG "client/assets/textures/projectiles/bullet_blast.png"
-  
+  mTankBodyBlast <- loadSprite (Settings.tank "blast_tank" "body.png") (0, 0) (128, 128)
+  eTurretImgBlast <- readImage (Settings.tank "blast_tank" "turret.png")
+  mBulletBlast <- loadJuicyPNG (Settings.projectile "bullet_blast.png")
+
   -- Load Common FX
-  eExplosionImg <- readImage "client/assets/textures/projectiles/explosion_spritesheet_blast.png"
-  mVignette <- loadJuicyPNG "client/assets/textures/ui/vignette_mask_01.png"
+  eExplosionImg <- readImage (Settings.projectile "explosion_spritesheet_blast.png")
+  mVignette <- loadJuicyPNG (Settings.ui "vignette_mask_01.png")
 
   -- Tải 4 khung hình 'lives'
-  let lifeIconPath = "client/assets/textures/ui/life_icons.png"
+  let lifeIconPath = Settings.ui "life_icons.png"
   let lifeCoords = [ ( (297, 132), (77, 20) )   -- 3 Mạng
                    , ( (201, 132), (77, 20) ) -- 2 Mạng
                    , ( (105, 132), (77, 20) ) -- 1 Mạng
