@@ -18,6 +18,8 @@ import Control.Concurrent.MVar (MVar)
 -- ================================================================
 -- TRẠNG THÁI CỦA MỘT TRẬN ĐẤU (GAMEPLAY)
 -- ================================================================
+data GameMode = PvP | Dungeon
+  deriving (Eq, Show)
 
 data RoomGameState = RoomGameState
   { rgsTick     :: Int
@@ -29,12 +31,13 @@ data RoomGameState = RoomGameState
   , rgsMap      :: GameMap
   , rgsSpawns   :: [Vec2]
   , rgsMatchState :: MatchState
+  , rgsMode     :: GameMode
   }
 
 data Command = Command SockAddr PlayerCommand
 
-initialRoomGameState :: GameMap -> [Vec2] -> RoomGameState
-initialRoomGameState loadedMap spawnPoints = RoomGameState
+initialRoomGameState :: GameMap -> [Vec2] -> GameMode -> RoomGameState
+initialRoomGameState loadedMap spawnPoints mode = RoomGameState
   { rgsTick = 0
   , rgsCommands = []
   , rgsPlayers = Map.empty
@@ -44,6 +47,7 @@ initialRoomGameState loadedMap spawnPoints = RoomGameState
   , rgsMap = loadedMap     
   , rgsSpawns = spawnPoints
   , rgsMatchState = Waiting
+  , rgsMode = mode
   }
 
 initialPlayerState :: Vec2 -> Int -> TankType -> PlayerState

@@ -81,21 +81,33 @@ gameLoop serverStateRef roomId roomStateRef = (forever $ do
       let gs_respawned = respawnDeadPlayers gs_filtered_entities
       
       -- Chỉ giữ lại người chơi còn mạng
-      let alivePlayers = Map.filter (\p -> psLives p > 0) (rgsPlayers gs_respawned)
+      let (isGameOver, mWinnerId) = case rgsMode gs_respawned of
+            -- Logic PvP: Game over khi còn 1 hoặc 0 người
+            PvP -> 
+              let alivePlayers_PvP = Map.filter (\p -> psLives p > 0) (rgsPlayers gs_respawned)
+              in if Map.size alivePlayers_PvP <= 1
+                   then (True, fmap psId (find (const True) (Map.elems alivePlayers_PvP)))
+                   else (False, Nothing)
+            
+            -- Logic Dungeon: Game over chỉ khi 0 người
+            Dungeon ->
+              let alivePlayers_Dungeon = Map.filter (\p -> psLives p > 0) (rgsPlayers gs_respawned)
+              in if Map.null alivePlayers_Dungeon
+                   then (True, Nothing) -- (Không có người thắng)
+                   else (False, Nothing)
       
-      if Map.size alivePlayers <= 1
+      if isGameOver
         then do
           -- GAME OVER
-          let mWinner = find (const True) (Map.elems alivePlayers) 
-          let winnerId = fmap psId mWinner
-          putStrLn $ "[GameLoop " ++ roomId ++ "] Match Over. Winner: " ++ show winnerId
+          putStrLn $ "[GameLoop " ++ roomId ++ "] Match Over. Winner: " ++ show mWinnerId
           
-          let newState = gs_respawned { rgsMatchState = GameOver winnerId, rgsCommands = [] }
-          let packet = SUP_MatchStateUpdate (GameOver winnerId)
+          let newState = gs_respawned { rgsMatchState = GameOver mWinnerId, rgsCommands = [] }
+          let packet = SUP_MatchStateUpdate (GameOver mWinnerId)
           -- Gửi gói tin cho tất cả người chơi (kể cả người đã chết)
           pure (newState, [(packet, Map.keys (rgsPlayers gs_respawned))])
         else do
           -- GAME TIẾP TỤC
+          let alivePlayers = Map.filter (\p -> psLives p > 0) (rgsPlayers gs_respawned)
           let snapshot = WorldSnapshot
                 { wsPlayers = Map.elems alivePlayers -- Chỉ gửi người còn sống
                 , wsEnemies = rgsEnemies gs_respawned

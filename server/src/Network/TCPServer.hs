@@ -20,7 +20,8 @@ import Data.List (find)
 import Control.Exception (catch, SomeException, bracket)
 
 import Core.Types
-import Types.Tank (TankType)
+import Types.Tank 
+import qualified Types.Tank as Tank
 import Network.Packet
 import GameLoop (gameLoop) 
 import Types.MatchState (MatchState(..)) 
@@ -223,6 +224,42 @@ processPacket pid h pkt sState serverStateRef =
           let newRooms = Map.insert roomId updatedRoom (ssRooms sState)
           let actions = broadcastRoomUpdate updatedRoom -- Lấy list [IO ()]
           pure (sState { ssRooms = newRooms }, actions)
+      
+    CTP_StartDungeon -> do
+      putStrLn $ "[TCP] Client " ++ show pid ++ " requested Dungeon start."
+      -- 1. Get client
+      let client = ssClients sState Map.! pid
+
+      -- 2. Tạo Room ID solo
+      newRoomId <- generateRoomId
+      putStrLn $ "[TCP] Creating solo dungeon " ++ newRoomId ++ " for " ++ show pid
+
+      -- 3. Get spawn point
+      let spawns = ssSpawns sState
+      let spawnPos = if not (null spawns) then spawns !! 0 else Vec2 100 100
+
+      -- 4. Tạo PlayerState (Tạm hardcode Tank.Rapid cho Dungeon)
+      let playerState = initialPlayerState spawnPos pid Tank.Rapid
+
+      -- 5. Tạo "fake" addr
+      let fakeAddr = SockAddrInet (fromIntegral pid) (tupleToHostAddress (127,0,0,1))
+      let playerStates = Map.singleton fakeAddr playerState
+
+      -- 6. Tạo GameState (với mode Dungeon)
+      let newRoomGame = initialRoomGameState (ssMap sState) spawns Dungeon
+      let newRoomGame' = newRoomGame { rgsPlayers = playerStates, rgsMatchState = InProgress }
+      roomGameMVar <- newMVar newRoomGame'
+
+      -- 7. Tạo và lưu Room
+      let newRoom = Room newRoomId (Map.singleton pid client) (Just roomGameMVar)
+      let newRooms = Map.insert newRoomId newRoom (ssRooms sState)
+      let newState = sState { ssRooms = newRooms }
+
+      -- 8. Chuẩn bị actions: fork loop + gửi "starting"
+      let gameLoopAction = forkIO $ gameLoop serverStateRef newRoomId roomGameMVar
+      let clientAction = sendTcpPacket h STP_GameStarting
+
+      pure (newState, [void gameLoopAction, clientAction])
 
     CTP_UpdateLobbyState mTank isReady -> do
       let (mRoom, mRoomId) = findRoomByPlayerId pid sState
@@ -259,7 +296,7 @@ processPacket pid h pkt sState serverStateRef =
                   
                   let playerStates = Map.fromList [(fakeAddr1, p1_state), (fakeAddr2, p2_state)]
                   
-                  let newRoomGame = initialRoomGameState (ssMap sState) (ssSpawns sState)
+                  let newRoomGame = initialRoomGameState (ssMap sState) (ssSpawns sState) PvP
                   let newRoomGame' = newRoomGame { rgsPlayers = playerStates, rgsMatchState = InProgress }
                   
                   roomGameMVar <- newMVar newRoomGame'

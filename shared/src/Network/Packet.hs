@@ -26,6 +26,7 @@ data ClientTcpPacket
   | CTP_UpdateLobbyState (Maybe TankType) Bool -- (Maybe TankType, IsReady)
   | CTP_LeaveRoom
   | CTP_RequestRematch
+  | CTP_StartDungeon
   deriving (Show, Generic)
 
 instance Binary ClientTcpPacket

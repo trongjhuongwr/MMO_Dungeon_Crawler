@@ -259,7 +259,7 @@ tcpListenLoop h mvar = loop LBS.empty -- SỬA: Bắt đầu với buffer rỗng
                           , igsTurretAnimRapid = animR
                           , igsTurretAnimBlast = animB
                           , igsMyId = csMyId cState
-                          , igsMatchState = Waiting
+                          , igsMatchState = InProgress
                           }
                     
                     sendUdpPacket (csUdpSocket cState) (csServerAddr cState) (CUP_Handshake (csMyId cState))
@@ -396,7 +396,7 @@ handleInputLogin event cState@(ClientState { csTcpHandle = h, csState = (S_Login
     _ -> pure cState
 handleInputLogin _ cState = pure cState -- Trạng thái không hợp lệ
 
--- === MENU ===
+-- === MAIN MENU ===
 handleInputMenu :: Event -> ClientState -> IO ClientState
 handleInputMenu event cState@(ClientState { csTcpHandle = h }) =
   case event of
@@ -406,10 +406,11 @@ handleInputMenu event cState@(ClientState { csTcpHandle = h }) =
           putStrLn "[Input] Clicked Start PvP"
           pure cState { csState = S_RoomSelection "" }
 
-      -- Nút "Dungeon (Disabled)" [Tâm (0, -60), Size (200, 50)]
+      -- Nút "Dungeon" [Tâm (0, -60), Size (200, 50)] -- << SỬA KHỐI NÀY
       | (x > -100 && x < 100 && y > -85 && y < -35) -> do
-          putStrLn "[Input] Clicked Dungeon (Disabled)"
-          pure cState -- Không làm gì
+          putStrLn "[Input] Clicked Dungeon"
+          sendTcpPacket h CTP_StartDungeon -- Gửi packet Dungeon
+          pure cState -- Chờ server phản hồi
 
       -- Nút "Shop (Disabled)" [Tâm (0, -120), Size (200, 50)]
       | (x > -100 && x < 100 && y > -145 && y < -95) -> do
