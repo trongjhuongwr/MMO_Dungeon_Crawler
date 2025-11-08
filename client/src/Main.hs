@@ -37,6 +37,9 @@ import Types.Tank (TankType(..))
 import Data.Maybe (Maybe(..), isJust, fromJust)
 import Data.List (find)
 import Data.Int (Int64)
+import qualified Data.ByteString as BS (hPut) 
+import qualified Data.ByteString as BS
+import Data.ByteString.Lazy.Internal (toStrict, fromStrict)
 
 -- ===================================================================
 -- KIỂU DỮ LIỆU STATE MÁY
@@ -161,7 +164,14 @@ connectTcp host port = do
 
 -- Hàm tiện ích gửi gói TCP
 sendTcpPacket :: Handle -> ClientTcpPacket -> IO ()
-sendTcpPacket h pkt = LBS.hPut h (encode pkt) >> hFlush h
+sendTcpPacket h pkt = do
+  let lazyMsg = encode pkt
+  -- 1. Ép lazy bytestring thành một bytestring nghiêm ngặt (strict)
+  let strictMsg = toStrict lazyMsg
+  -- 2. Gửi bằng hàm hPut của bytestring nghiêm ngặt
+  BS.hPut h strictMsg
+  -- 3. Đẩy buffer đi
+  hFlush h
 
 -- Hàm tiện ích gửi gói UDP
 sendUdpPacket :: Socket -> SockAddr -> ClientUdpPacket -> IO ()
@@ -178,20 +188,20 @@ sendUdpPacket sock addr pkt = do
 tcpListenLoop :: Handle -> MVar ClientState -> IO ()
 tcpListenLoop h mvar = loop LBS.empty -- SỬA: Bắt đầu với buffer rỗng
   where
-    -- SỬA: Thêm 'buffer' vào chữ ký hàm
     loop :: LBS.ByteString -> IO ()
     loop buffer = do
-      -- 1. Đọc thêm dữ liệu
-      newChunk <- (LBS.hGet h 8192) `catch` \(e :: SomeException) -> do
-        -- putStrLn $ "[TCP] hGet Error: " ++ show e
-        pure LBS.empty -- Coi như server ngắt kết nối
-      
-      if LBS.null newChunk && LBS.null buffer
+      -- 1. ĐỌC CHUNK NGHIÊM NGẶT (STRICT)
+      strictChunk <- (BS.hGetSome h 8192) `catch` \(e :: SomeException) -> do
+        putStrLn $ "[TCP] hGetSome Error: " ++ show e
+        pure BS.empty -- Coi như server ngắt kết nối
+
+      -- 2. KIỂM TRA NGẮT KẾT NỐI
+      if BS.null strictChunk && LBS.null buffer
       then putStrLn "[TCP] Server disconnected." >> fail "Server disconnected"
       else do
-        -- 2. Nối buffer cũ với dữ liệu mới
-        let fullBuffer = buffer <> newChunk
-        -- 3. Gọi hàm xử lý buffer
+        -- 3. NỐI BUFFER LƯỜI (LAZY)
+        let fullBuffer = buffer <> fromStrict strictChunk
+        -- 4. XỬ LÝ BUFFER (hàm processBuffer không đổi)
         processBuffer fullBuffer
 
     -- HÀM MỚI: Xử lý buffer một cách đệ quy
@@ -390,10 +400,23 @@ handleInputLogin _ cState = pure cState -- Trạng thái không hợp lệ
 handleInputMenu :: Event -> ClientState -> IO ClientState
 handleInputMenu event cState@(ClientState { csTcpHandle = h }) =
   case event of
-    (EventKey (MouseButton LeftButton) Down _ (x, y)) ->
-      if (x > -20 && x < 100 && y > -200 && y < -150) -- Bấm nút Start PvP
-      then pure cState { csState = S_RoomSelection "" }
-      else pure cState
+    (EventKey (MouseButton LeftButton) Down _ (x, y))
+      -- Nút "Start PvP" [Tâm (0, 0), Size (200, 50)]
+      | (x > -100 && x < 100 && y > -25 && y < 25) -> do
+          putStrLn "[Input] Clicked Start PvP"
+          pure cState { csState = S_RoomSelection "" }
+
+      -- Nút "Dungeon (Disabled)" [Tâm (0, -60), Size (200, 50)]
+      | (x > -100 && x < 100 && y > -85 && y < -35) -> do
+          putStrLn "[Input] Clicked Dungeon (Disabled)"
+          pure cState -- Không làm gì
+
+      -- Nút "Shop (Disabled)" [Tâm (0, -120), Size (200, 50)]
+      | (x > -100 && x < 100 && y > -145 && y < -95) -> do
+          putStrLn "[Input] Clicked Shop (Disabled)"
+          pure cState -- Không làm gì
+          
+      | otherwise -> pure cState
     _ -> pure cState
 
 -- === ROOM SELECTION ===

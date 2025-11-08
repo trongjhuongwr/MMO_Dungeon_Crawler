@@ -26,11 +26,19 @@ import GameLoop (gameLoop)
 import Types.MatchState (MatchState(..)) 
 import Types.Common (Vec2(..)) 
 import qualified Utils.Random as Rnd (getRandomNumber)
+import qualified Data.ByteString as BS 
+import qualified Data.ByteString as BS (hPut)
+import Data.ByteString.Lazy.Internal (fromStrict, toStrict)
 
 -- Hàm tiện ích để gửi gói tin TCP (an toàn)
 sendTcpPacket :: Handle -> ServerTcpPacket -> IO ()
-sendTcpPacket h pkt = (LBS.hPut h (encode pkt) >> hFlush h) `catch` \(e :: SomeException) ->
-  putStrLn $ "[TCP] Failed to send packet to handle: " ++ show e
+sendTcpPacket h pkt = (do
+  let lazyMsg = encode pkt
+  let strictMsg = toStrict lazyMsg -- Ép thành strict
+  BS.hPut h strictMsg               -- Gửi strict
+  hFlush h
+  ) `catch` \(e :: SomeException) ->
+    putStrLn $ "[TCP] Failed to send packet to handle: " ++ show e
 
 -- Hàm tiện ích để tạo Room ID
 generateRoomId :: IO String
@@ -81,15 +89,18 @@ handleClient sock addr serverStateRef = do
     -- Vòng lặp chính đọc dữ liệu từ Handle
     loop :: Handle -> Maybe Int -> LBS.ByteString -> IO ()
     loop h mPlayerId buffer = do
-      newChunk <- (LBS.hGet h 8192) `catch` \(e :: SomeException) -> do
-        putStrLn $ "[TCP] hGet Error (" ++ show addr ++ "): " ++ show e
-        pure LBS.empty -- Coi như client ngắt kết nối
-      
-      if LBS.null newChunk && LBS.null buffer
+  -- 1. ĐỌC CHUNK NGHIÊM NGẶT (STRICT)
+      strictChunk <- (BS.hGetSome h 8192) `catch` \(e :: SomeException) -> do
+        putStrLn $ "[TCP] hGetSome Error (" ++ show addr ++ "): " ++ show e
+        pure BS.empty -- Coi như client ngắt kết nối
+
+  -- 2. KIỂM TRA NGẮT KẾT NỐI
+      if BS.null strictChunk && LBS.null buffer
       then handleDisconnect h mPlayerId serverStateRef -- Client đóng kết nối
       else do
-        let fullBuffer = buffer <> newChunk
-        -- Xử lý buffer (có thể chứa 0, 1, hoặc nhiều gói tin)
+    -- 3. NỐI BUFFER LƯỜI (LAZY)
+        let fullBuffer = buffer <> fromStrict strictChunk
+    -- Xử lý buffer (hàm processBuffer không đổi)
         processBuffer h mPlayerId fullBuffer
 
     -- Xử lý buffer một cách đệ quy
