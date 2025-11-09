@@ -1,4 +1,4 @@
--- file: client/src/Network/Client.hs
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Use fewer imports" #-}
 {-# HLINT ignore "Redundant as" #-}
@@ -33,7 +33,7 @@ import Data.ByteString.Lazy.Internal (toStrict, fromStrict)
 import qualified Data.Set as Set
 import Core.Animation (Animation(..))
 
-import Types -- Module Types.hs mới
+import Types
 import Game (updateSnapshot, initialWorldSnapshot, dummyAnim) -- Module Game.hs mới
 import Systems.MapLoader (loadMapFromFile) 
 import Renderer.Resources (Resources(..))
@@ -172,23 +172,43 @@ tcpListenLoop h mvar = loop LBS.empty
 -- Lắng nghe gói UDP từ Server (Trong Game)
 udpListenLoop :: Socket -> MVar ClientState -> IO ()
 udpListenLoop sock mvar = forever $ do
-  (strictMsg, _) <- BS.recvFrom sock 8192
-  
-  mState <- readMVar mvar
-  
-  case (csState mState) of
-    S_InGame gdata -> do
-      case decodeOrFail (fromStrict strictMsg) of
-        Left _ -> pure () -- Lỗi decode, bỏ qua
-        Right (_, _, udpPkt) -> do
-          newGData <- case (udpPkt :: ServerUdpPacket) of
-            SUP_MatchStateUpdate newState -> do
-              when (newState /= igsMatchState gdata) $ 
-                putStrLn $ "[Game] Match status changed to: " ++ show newState
-              pure gdata { igsMatchState = newState }
+  -- 1. Nhận dữ liệu TỪ BÊN NGOÀI MVar
+  (strictMsg, _) <- BS.recvFrom sock 8192 `catch` \(e :: SomeException) -> do
+    putStrLn $ "[UDP] recvFrom Error: " ++ show e
+    pure (BS.empty, SockAddrInet 0 0) -- Bỏ qua nếu lỗi
+
+  -- Chỉ xử lý nếu có dữ liệu
+  when (not (BS.null strictMsg)) $ do
+    
+    -- 2. Bắt đầu khối modifyMVar_ ĐỂ ĐẢM BẢO TÍNH NGUYÊN TỬ
+    modifyMVar_ mvar $ \cState -> do
+      
+      -- 3. Kiểm tra trạng thái HIỆN TẠI (lấy từ cState)
+      case (csState cState) of
+        S_InGame gdata -> do
+          
+          -- 4. Decode packet
+          case decodeOrFail (fromStrict strictMsg) of
+            Left _ -> do
+              -- Lỗi decode, bỏ qua, trả về trạng thái cũ
+              pure cState 
               
-            SUP_Snapshot newSnapshot -> 
-              pure $ updateSnapshot (csResources mState) gdata newSnapshot
+            Right (_, _, (udpPkt :: ServerUdpPacket)) -> do
               
-          modifyMVar_ mvar (\cs -> pure cs { csState = S_InGame newGData })
-    _ -> pure ()
+              -- 5. Tính toán state mới DỰA TRÊN gdata HIỆN TẠI
+              newGData <- case udpPkt of
+                SUP_MatchStateUpdate newState -> do
+                  when (newState /= igsMatchState gdata) $ 
+                    putStrLn $ "[Game] Match status changed to: " ++ show newState
+                  pure gdata { igsMatchState = newState }
+                  
+                SUP_Snapshot newSnapshot -> 
+                  -- updateSnapshot giờ sẽ nhận được gdata "sạch"
+                  -- (đã được updateGame lọc)
+                  pure $ updateSnapshot (csResources cState) gdata newSnapshot
+                  
+              -- 6. Trả về ClientState đã cập nhật
+              pure cState { csState = S_InGame newGData }
+              
+        -- 7. Nếu không phải S_InGame, bỏ qua packet, trả về trạng thái cũ
+        _ -> pure cState
