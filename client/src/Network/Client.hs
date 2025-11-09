@@ -1,4 +1,8 @@
 -- file: client/src/Network/Client.hs
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use fewer imports" #-}
+{-# HLINT ignore "Redundant as" #-}
+{-# HLINT ignore "Redundant bracket" #-}
 module Network.Client
   ( connectTcp
   , sendTcpPacket
@@ -34,6 +38,7 @@ import Game (updateSnapshot, initialWorldSnapshot, dummyAnim) -- Module Game.hs 
 import Systems.MapLoader (loadMapFromFile) 
 import Renderer.Resources (Resources(..))
 import qualified Settings as Settings
+import Types.GameMode (GameMode(..))
 
 connectTcp :: HostName -> PortNumber -> IO (Handle, Socket, SockAddr)
 connectTcp host port = do
@@ -113,14 +118,21 @@ tcpListenLoop h mvar = loop LBS.empty
                     lobbyData = LobbyData roomId pInfos myTank myReady
                 in pure cState { csState = S_Lobby lobbyData }
 
-              STP_GameStarting -> do
+              STP_GameStarting gameMode -> do
                 -- SỬ DỤNG CONFIG ASSETS
-                eMapData <- loadMapFromFile Settings.mapPVP
+                let (mapPath, mapName) = case gameMode of
+                      PvP -> (Settings.mapPVP, "PvP")
+                      PvE -> (Settings.mapDungeon, "PvE")
+                
+                eMapData <- loadMapFromFile mapPath
                 case eMapData of
                   Left err -> putStrLn ("Failed to load map: " ++ err) >> pure cState
                   Right (gmap, _) -> do
                     let (S_Lobby lobbyData) = csState cState
-                    let myTank = fromJust $ ldMyTank lobbyData
+                    myTank <- case (csState cState, gameMode) of
+                                (S_Lobby ld, PvP) -> pure $ fromJust $ ldMyTank ld
+                                (S_DungeonLobby (Just tank), PvE) -> pure tank
+                                _ -> fail "Logic error: Starting the game without a tank."
                     
                     let assets = csResources cState
                     let animR = (dummyAnim assets) { animFrames = resTurretFramesRapid assets }
@@ -138,6 +150,7 @@ tcpListenLoop h mvar = loop LBS.empty
                           , igsTurretAnimBlast = animB
                           , igsMyId = csMyId cState
                           , igsMatchState = InProgress
+                          , igsMode = gameMode
                           }
                     
                     sendUdpPacket (csUdpSocket cState) (csServerAddr cState) (CUP_Handshake (csMyId cState))

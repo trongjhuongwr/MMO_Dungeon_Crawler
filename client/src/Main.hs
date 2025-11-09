@@ -1,5 +1,6 @@
--- file: client/src/Main.hs
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Redundant bracket" #-}
 module Main where
 
 import Network.Socket hiding (recv, SendTo, RecvFrom)
@@ -79,12 +80,26 @@ renderIO mvar = do
     S_Menu -> pure renderMenu
     S_RoomSelection roomId -> pure $ renderRoomSelection roomId
     S_Lobby (LobbyData rId pInfo myTank myReady) -> pure $ renderLobby rId pInfo (csMyId cState) myTank myReady
+    S_DungeonLobby mTank -> pure $ renderDungeonLobby mTank
     S_InGame gdata -> 
       pure $ render (csResources cState) (igsGameMap gdata) (igsWorld gdata) 
                     (igsEffects gdata) (igsTurretAnimRapid gdata) 
                     (igsTurretAnimBlast gdata) (Just $ igsMyId gdata) 
                     (igsMatchState gdata)
     S_PostGame (PostGameData status) -> pure $ renderPostGame status
+
+    S_Paused gdata isConfirming -> do
+      -- 1. Vẽ lại game state y như cũ
+      let gamePic = render (csResources cState) (igsGameMap gdata) (igsWorld gdata) 
+                           (igsEffects gdata) (igsTurretAnimRapid gdata) 
+                           (igsTurretAnimBlast gdata) (Just $ igsMyId gdata) 
+                           (igsMatchState gdata)
+      -- 2. Vẽ lớp phủ làm mờ
+      let dimOverlay = Color (makeColor 0 0 0 0.5) $ rectangleSolid 800 600
+      -- 3. Vẽ menu
+      let menuPic = renderPauseMenu isConfirming
+      
+      pure $ Pictures [gamePic, dimOverlay, menuPic]
 
 -- UPDATE CHÍNH (Router)
 updateClientIO :: Float -> MVar ClientState -> IO (MVar ClientState)
@@ -107,5 +122,8 @@ updateClientIO dt mvar = do
               in pure (cState { csState = S_PostGame (PostGameData status) }, mvar)
             _ -> 
               pure (cState { csState = S_InGame gdata' }, mvar)
+      
+      -- Khi Pause, không update game, không gửi packet UDP
+      S_Paused _ _ -> pure (cState, mvar)
       
       _ -> pure (cState, mvar)
