@@ -85,6 +85,10 @@ handleInputDungeonLobby event cState@(ClientState { csTcpHandle = h, csState = (
             Nothing -> do
               putStrLn "[Input] Must select a tank first!"
               pure cState -- Không làm gì nếu chưa chọn tank
+      -- VÙNG CLICK NÚT "BACK" (cho y = -260)
+      | (x > -100 && x < 100 && y > -285 && y < -235) -> do -- <--- THÊM LOGIC NÀY
+          putStrLn "[Input] Back to Menu"
+          pure cState { csState = S_Menu }
       | otherwise -> pure cState
     _ -> pure cState
 handleInputDungeonLobby _ cState = pure cState
@@ -104,6 +108,10 @@ handleInputRoomSelection event cState@(ClientState { csTcpHandle = h, csState = 
       | (x > -100 && x < 100 && y > -85 && y < -35) -> do 
           sendTcpPacket h (CTP_JoinRoom roomId)
           pure cState
+      -- VÙNG CLICK NÚT "BACK" (cho y = -210)
+      | (x > -100 && x < 100 && y > -235 && y < -185) -> do -- <--- THÊM LOGIC NÀY
+          putStrLn "[Input] Back to Menu"
+          pure cState { csState = S_Menu }
     _ -> pure cState
 handleInputRoomSelection _ cState = pure cState
 
