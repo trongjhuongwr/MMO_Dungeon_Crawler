@@ -57,10 +57,10 @@ handleInputMenu event cState@(ClientState { csTcpHandle = h }) =
           putStrLn "[Input] Clicked Start PvP"
           pure cState { csState = S_RoomSelection "" }
       | (x > -100 && x < 100 && y > -85 && y < -35) -> do
-          putStrLn "[Input] Clicked Dungeon"
+          putStrLn "[Input] Clicked Start PvE"
           pure cState { csState = S_DungeonLobby Nothing } 
       | (x > -100 && x < 100 && y > -145 && y < -95) -> do
-          putStrLn "[Input] Clicked Shop (Disabled)"
+          putStrLn "[Input] Clicked Start 2PvE (Disabled)"
           pure cState 
       | otherwise -> pure cState
     _ -> pure cState
@@ -79,7 +79,7 @@ handleInputDungeonLobby event cState@(ClientState { csTcpHandle = h, csState = (
       | (x > -100 && x < 100 && y > -225 && y < -175) -> do 
           case mTank of
             Just _ -> do
-              putStrLn $ "[Input] Starting Dungeon with tank: " ++ show mTank
+              putStrLn $ "[Input] Starting PvE with tank: " ++ show mTank
               sendTcpPacket h (CTP_StartDungeon mTank)
               pure cState -- Server sẽ chuyển state sang InGame
             Nothing -> do
