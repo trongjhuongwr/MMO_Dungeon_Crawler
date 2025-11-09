@@ -67,16 +67,17 @@ handleInputLogin _ cState = pure cState
 handleInputMenu :: Event -> ClientState -> IO ClientState
 handleInputMenu event cState@(ClientState { csTcpHandle = h }) =
   case event of
-    (EventKey (MouseButton LeftButton) Down _ (x, y))
-      | (x > -100 && x < 100 && y > -25 && y < 25) -> do
+    EventKey (MouseButton LeftButton) Down _ (x, y)
+      | x > -100 && x < 100 && y > -25 && y < 25 -> do
           putStrLn "[Input] Clicked Start PvP"
           pure cState { csState = S_RoomSelection "" }
-      | (x > -100 && x < 100 && y > -85 && y < -35) -> do
-          putStrLn "[Input] Clicked Start PvE"
-          pure cState { csState = S_DungeonLobby Nothing } 
-      | (x > -100 && x < 100 && y > -145 && y < -95) -> do
+      | x > -100 && x < 100 && y > -85 && y < -35 -> do
+          putStrLn "[Input] Clicked Start PvE (disabled)"
+          -- PvE feature is disabled client-side; do not enter dungeon lobby
+          pure cState
+      | x > -100 && x < 100 && y > -145 && y < -95 -> do
           putStrLn "[Input] Clicked Start 2PvE (Disabled)"
-          pure cState 
+          pure cState
       | otherwise -> pure cState
     _ -> pure cState
 
@@ -92,14 +93,9 @@ handleInputDungeonLobby event cState@(ClientState { csTcpHandle = h, csState = (
           pure cState { csState = S_DungeonLobby (Just Blast) }
       -- "Start Dungeon"
       | (x > -100 && x < 100 && y > -225 && y < -175) -> do 
-          case mTank of
-            Just _ -> do
-              putStrLn $ "[Input] Starting PvE with tank: " ++ show mTank
-              sendTcpPacket h (CTP_StartDungeon mTank)
-              pure cState -- Server sẽ chuyển state sang InGame
-            Nothing -> do
-              putStrLn "[Input] Must select a tank first!"
-              pure cState -- Không làm gì nếu chưa chọn tank
+          -- PvE is disabled: do not send start request
+          putStrLn "[Input] Start Dungeon pressed, but PvE is disabled."
+          pure cState
       -- VÙNG CLICK NÚT "BACK" (cho y = -260)
       | (x > -100 && x < 100 && y > -285 && y < -235) -> do -- <--- THÊM LOGIC NÀY
           putStrLn "[Input] Back to Menu"

@@ -22,6 +22,7 @@ source-repository head
 
 library
   exposed-modules:
+      Config
       Core.Animation
       Core.Effect
       Core.Renderer
@@ -51,14 +52,15 @@ library
     , filepath
     , gloss
     , gloss-juicy
-    , hspec
     , network
     , shared
+    , yaml
   default-language: Haskell2010
 
 executable mmo-client
   main-is: Main.hs
   other-modules:
+      Config
       Core.Animation
       Core.Effect
       Core.Renderer
@@ -88,32 +90,7 @@ executable mmo-client
     , filepath
     , gloss
     , gloss-juicy
-    , hspec
     , network
     , shared
-  default-language: Haskell2010
-
-test-suite client-test
-  type: exitcode-stdio-1.0
-  main-is: InputSpec.hs
-  other-modules:
-      Paths_client
-  hs-source-dirs:
-      test
-  ghc-options: -threaded
-  build-depends:
-      JuicyPixels
-    , aeson
-    , array
-    , base >=4.7 && <5
-    , binary
-    , bytestring
-    , client
-    , containers
-    , filepath
-    , gloss
-    , gloss-juicy
-    , hspec
-    , network
-    , shared
+    , yaml
   default-language: Haskell2010

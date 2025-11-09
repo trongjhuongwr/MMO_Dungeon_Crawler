@@ -15,7 +15,7 @@ import Network.Socket hiding (recv, SendTo, RecvFrom)
 import System.IO
 import Control.Exception (try, SomeException, catch)
 import Data.Binary (encode, decode, decodeOrFail)
-import Control.Concurrent (MVar, newMVar, readMVar, modifyMVar_, modifyMVar)
+import Control.Concurrent (MVar, newMVar, readMVar, modifyMVar_, modifyMVar, threadDelay)
 import Control.Monad (forever, when)
 import qualified Data.ByteString.Lazy as LBS
 import qualified Network.Socket.ByteString as BS
@@ -25,7 +25,7 @@ import Types.Common
 import Types.Player
 import Types.MatchState (MatchState(..)) 
 import Data.Maybe (Maybe(..), isJust, fromJust)
-import Data.List (find)
+import Data.List (find, isInfixOf)
 import Data.Int (Int64)
 import qualified Data.ByteString as BS (hPut) 
 import qualified Data.ByteString as BS
@@ -40,22 +40,22 @@ import Renderer.Resources (Resources(..))
 import qualified Settings as Settings
 import Types.GameMode (GameMode(..))
 
-connectTcp :: HostName -> PortNumber -> IO (Handle, Socket, SockAddr)
-connectTcp host port = do
-  -- TCP (SỬA ĐỔI DÒNG NÀY)
-  addrTCP <- head <$> getAddrInfo (Just defaultHints { addrSocketType = Stream, addrFamily = AF_INET }) (Just host) (Just $ show port)
+connectTcp :: HostName -> PortNumber -> String -> IO (Handle, Socket, SockAddr)
+connectTcp host tcpPort udpPortString = do
+  -- TCP
+  addrTCP <- head <$> getAddrInfo (Just defaultHints { addrSocketType = Stream, addrFamily = AF_INET }) (Just host) (Just $ show tcpPort)
   sockTCP <- socket (addrFamily addrTCP) (addrSocketType addrTCP) (addrProtocol addrTCP)
   
-  setSocketOption sockTCP NoDelay 1 -- <--- THÊM DÒNG NÀY
+  setSocketOption sockTCP NoDelay 1 
   
   connect sockTCP (addrAddress addrTCP)
   h <- socketToHandle sockTCP ReadWriteMode
   hSetBuffering h NoBuffering
   
-  -- UDP (SỬA ĐỔI DÒNG NÀY)
-  sockUDP <- socket AF_INET Datagram defaultProtocol -- (Dòng này đã đúng AF_INET)
+  -- UDP
+  sockUDP <- socket AF_INET Datagram defaultProtocol 
   bind sockUDP (SockAddrInet 0 0) 
-  serverAddrUDP <- head <$> getAddrInfo (Just defaultHints { addrSocketType = Datagram, addrFamily = AF_INET }) (Just host) (Just "8888")
+  serverAddrUDP <- head <$> getAddrInfo (Just defaultHints { addrSocketType = Datagram, addrFamily = AF_INET }) (Just host) (Just udpPortString) -- <--- SỬA
   
   return (h, sockUDP, addrAddress serverAddrUDP)
 
@@ -172,43 +172,47 @@ tcpListenLoop h mvar = loop LBS.empty
 -- Lắng nghe gói UDP từ Server (Trong Game)
 udpListenLoop :: Socket -> MVar ClientState -> IO ()
 udpListenLoop sock mvar = forever $ do
-  -- 1. Nhận dữ liệu TỪ BÊN NGOÀI MVar
-  (strictMsg, _) <- BS.recvFrom sock 8192 `catch` \(e :: SomeException) -> do
-    putStrLn $ "[UDP] recvFrom Error: " ++ show e
-    pure (BS.empty, SockAddrInet 0 0) -- Bỏ qua nếu lỗi
+  eres <- try (BS.recvFrom sock 8192) :: IO (Either SomeException (BS.ByteString, SockAddr))
+  case eres of
+    Left e -> do
+      let serr = show e
+      -- Suppress noisy WSA errors that commonly occur when a UDP packet
+      -- hits an unreachable port on Windows (ICMP port unreachable).
+      if "WSAECONNRESET" `isInfixOf` serr || "Connection reset by peer" `isInfixOf` serr
+        then pure ()
+        else putStrLn $ "[UDP] recvFrom Error: " ++ show e
+      -- backoff a little to avoid tight logging loops
+      threadDelay 100000
 
-  -- Chỉ xử lý nếu có dữ liệu
-  when (not (BS.null strictMsg)) $ do
-    
-    -- 2. Bắt đầu khối modifyMVar_ ĐỂ ĐẢM BẢO TÍNH NGUYÊN TỬ
-    modifyMVar_ mvar $ \cState -> do
-      
-      -- 3. Kiểm tra trạng thái HIỆN TẠI (lấy từ cState)
-      case (csState cState) of
-        S_InGame gdata -> do
-          
-          -- 4. Decode packet
-          case decodeOrFail (fromStrict strictMsg) of
-            Left _ -> do
-              -- Lỗi decode, bỏ qua, trả về trạng thái cũ
-              pure cState 
-              
-            Right (_, _, (udpPkt :: ServerUdpPacket)) -> do
-              
-              -- 5. Tính toán state mới DỰA TRÊN gdata HIỆN TẠI
-              newGData <- case udpPkt of
-                SUP_MatchStateUpdate newState -> do
-                  when (newState /= igsMatchState gdata) $ 
-                    putStrLn $ "[Game] Match status changed to: " ++ show newState
-                  pure gdata { igsMatchState = newState }
-                  
-                SUP_Snapshot newSnapshot -> 
-                  -- updateSnapshot giờ sẽ nhận được gdata "sạch"
-                  -- (đã được updateGame lọc)
-                  pure $ updateSnapshot (csResources cState) gdata newSnapshot
-                  
-              -- 6. Trả về ClientState đã cập nhật
-              pure cState { csState = S_InGame newGData }
-              
-        -- 7. Nếu không phải S_InGame, bỏ qua packet, trả về trạng thái cũ
-        _ -> pure cState
+    Right (strictMsg, _) ->
+      -- Chỉ xử lý nếu có dữ liệu
+      when (not (BS.null strictMsg)) $ do
+        -- 2. Bắt đầu khối modifyMVar_ ĐỂ ĐẢM BẢO TÍNH NGUYÊN TỬ
+        modifyMVar_ mvar $ \cState -> do
+          -- 3. Kiểm tra trạng thái HIỆN TẠI (lấy từ cState)
+          case (csState cState) of
+            S_InGame gdata -> do
+              -- 4. Decode packet
+              case decodeOrFail (fromStrict strictMsg) of
+                Left _ -> do
+                  -- Lỗi decode, bỏ qua, trả về trạng thái cũ
+                  pure cState 
+
+                Right (_, _, (udpPkt :: ServerUdpPacket)) -> do
+                  -- 5. Tính toán state mới DỰA TRÊN gdata HIỆN TẠI
+                  newGData <- case udpPkt of
+                    SUP_MatchStateUpdate newState -> do
+                      when (newState /= igsMatchState gdata) $
+                        putStrLn $ "[Game] Match status changed to: " ++ show newState
+                      pure gdata { igsMatchState = newState }
+
+                    SUP_Snapshot newSnapshot -> 
+                      -- updateSnapshot giờ sẽ nhận được gdata "sạch"
+                      -- (đã được updateGame lọc)
+                      pure $ updateSnapshot (csResources cState) gdata newSnapshot
+
+                  -- 6. Trả về ClientState đã cập nhật
+                  pure cState { csState = S_InGame newGData }
+
+            -- 7. Nếu không phải S_InGame, bỏ qua packet, trả về trạng thái cũ
+            _ -> pure cState

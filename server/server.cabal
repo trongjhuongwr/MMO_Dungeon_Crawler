@@ -28,22 +28,12 @@ library
       Core.Types
       Network.TCPServer
       Network.UDPServer
-      Network.SessionManager
-      Network.Protocol
-      Network.PacketParser
       Systems.MapLoader
       Systems.AISystem
       Systems.CombatSystem
-      Systems.EffectSystem
-      Systems.EntitySystem
-      Systems.ItemSystem
-      Systems.PartySystem
       Systems.PhysicsSystem
-      Systems.SkillSystem
-      Systems.SyncSystem
       Data.Database
       Data.Queries.PlayerQuery
-      Handlers.LoginHandler
       Utils.Random
       GameLoop
   other-modules:
@@ -61,6 +51,7 @@ library
     , filepath
     , network
     , shared
+    , yaml
   default-language: Haskell2010
 
 executable mmo-server
@@ -84,4 +75,5 @@ executable mmo-server
     , network
     , server
     , shared
+    , yaml
   default-language: Haskell2010

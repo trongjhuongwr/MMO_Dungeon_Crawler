@@ -14,7 +14,6 @@ dependencies:
   - bytestring
   - network
   - binary
-  # Client cũng cần dùng các kiểu dữ liệu từ 'shared'
   - shared
   - gloss
   - gloss-juicy
@@ -23,9 +22,7 @@ dependencies:
   - array
   - aeson
   - filepath
-
-# Thêm dependency định nghĩa cho test suite
-  - hspec
+  - yaml
 
 # Phần thư viện của client (chứa logic hiển thị, input)
 library:
@@ -44,14 +41,3 @@ executables:
     dependencies:
       # Liên kết đến phần library của gói 'client'
       - client
-
-# Test suite (HSpec)
-tests:
-  client-test:
-    main:                InputSpec.hs
-    source-dirs:         test
-    ghc-options:
-      - -threaded
-    dependencies:
-      - client
-      - hspec

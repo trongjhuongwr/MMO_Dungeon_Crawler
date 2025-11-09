@@ -13,6 +13,7 @@ import Core.Renderer (render) -- Render game cũ
 import UI.Screens
 import Types.MatchState (MatchState(..)) 
 import Data.Maybe (Maybe(..)) 
+import Config (ClientConfig(..), loadConfig)
 
 -- Imports các module đã tách
 import Types
@@ -31,6 +32,10 @@ main = withSocketsDo $ do
   hSetBuffering stdout LineBuffering
   
   putStrLn "Starting client..."
+
+  config <- loadConfig "client/config/client.yaml"
+  putStrLn $ "Config loaded: " ++ show config
+
   eResources <- R.loadResources 
   
   case eResources of
@@ -38,7 +43,10 @@ main = withSocketsDo $ do
     Right assets -> do 
       putStrLn "Assets loaded."
       
-      eConn <- try $ connectTcp "127.0.0.1" 4000
+      eConn <- try $ connectTcp 
+        (server_host config) 
+        (fromIntegral $ server_tcp_port config) 
+        (server_udp_port config)
       
       case eConn of
         Left (e :: SomeException) -> putStrLn $ "Cannot connect to server: " ++ show e

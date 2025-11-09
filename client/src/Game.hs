@@ -7,7 +7,7 @@ module Game
 
 import Types (InGameState(..))
 import Network.Packet (WorldSnapshot(..), PlayerCommand(..))
-import Types.Player (PlayerCommand(..))
+import Types.Player (PlayerState(..), PlayerCommand(..))
 import Types.Bullet (BulletState(..))
 import Types.Common (Vec2(..))
 import qualified Data.Set as Set
@@ -16,6 +16,7 @@ import Data.Maybe (Maybe(..))
 import Core.Effect (Effect(..), makeExplosion, updateEffect, isEffectFinished)
 import Core.Animation (Animation(..), updateAnimation, startAnimation)
 import Input (KeyMap, calculateMoveVector)
+import Data.List (find)
 import Renderer.Resources (Resources(..))
 
 -- Hàm helper
@@ -56,12 +57,40 @@ updateGame dt gdata =
     -- Tạo command
     moveVec = calculateMoveVector (igsKeys gdata)
     (mouseX, mouseY) = igsMousePos gdata
-    mathAngle = atan2 mouseY mouseX 
-    glossAngle = mathAngle - (pi / 2)
-    
+
+    -- Compute turret angle in world coordinates.
+    -- The renderer applies: final = Rotate (radToDeg playerTurretAngle) (Translate (-cam) world)
+    -- Mapping from screen (mouse) to world: world = rotate (-playerTurretAngle) mouse + cam
+    -- So we need the player's current position (cam) and current turret angle (from snapshot)
+    players = wsPlayers (igsWorld gdata)
+    mPlayerState = find (\p -> psId p == igsMyId gdata) players
+
+    rotateVec :: Float -> (Float, Float) -> (Float, Float)
+    rotateVec a (vx, vy) =
+      let c = cos a
+          s = sin a
+      in (c * vx - s * vy, s * vx + c * vy)
+
+    (pcAngle, _) = case mPlayerState of
+      Just p ->
+        let camX = vecX $ psPosition p
+            camY = vecY $ psPosition p
+            playerTurret = psTurretAngle p
+            (mx', my') = rotateVec (- playerTurret) (mouseX, mouseY)
+            worldMouseX = mx' + camX
+            worldMouseY = my' + camY
+            mathAngle = atan2 (worldMouseY - camY) (worldMouseX - camX)
+            glossAngle = mathAngle - (pi / 2)
+        in (-glossAngle, True)
+      Nothing ->
+        -- Fallback to previous screen-space behaviour if we don't have player info
+        let mathAngle = atan2 mouseY mouseX
+            glossAngle = mathAngle - (pi / 2)
+        in (-glossAngle, False)
+
     command = PlayerCommand
       { pcMoveVec     = moveVec
-      , pcTurretAngle = -glossAngle 
+      , pcTurretAngle = pcAngle
       , pcDidFire     = igsDidFire gdata
       }
       

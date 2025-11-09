@@ -27,7 +27,7 @@ import Network.Packet
 import GameLoop (gameLoop) 
 import Types.MatchState (MatchState(..)) 
 import Types.Common (Vec2(..)) 
-import qualified Core.Settings as Settings
+import Core.Config (AppConfig(..))
 import qualified Utils.Random as Rnd (getRandomNumber)
 import qualified Data.ByteString as BS 
 import qualified Data.ByteString as BS (hPut)
@@ -51,11 +51,10 @@ generateRoomId = do
   -- Đảm bảo Room ID có 4 chữ số
   pure $ take 4 (show (abs num `mod` 10000 + 10000))
 
-tcpPort :: PortNumber
-tcpPort = Settings.getServerTcpPort
 
-startTcpServer :: MVar ServerState -> IO ()
-startTcpServer serverStateRef = withSocketsDo $ do
+startTcpServer :: AppConfig -> MVar ServerState -> IO ()
+startTcpServer config serverStateRef = withSocketsDo $ do
+  let tcpPort = port config
   addr <- resolve (show tcpPort)
   -- Dùng bracket để đảm bảo socket chính được đóng khi server tắt
   bracket (open addr) close $ \sock -> do
@@ -68,7 +67,7 @@ startTcpServer serverStateRef = withSocketsDo $ do
       return ()
   where
     resolve port = do
-      let hints = defaultHints { addrFlags = [AI_PASSIVE], addrSocketType = Stream, addrFamily = AF_INET }
+      let hints = defaultHints { addrFlags = [AI_PASSIVE], addrSocketType = Stream, addrFamily = AF_INET, addrProtocol = defaultProtocol }
       head <$> getAddrInfo (Just hints) Nothing (Just port)
     open addr = do
       sock <- socket (addrFamily addr) (addrSocketType addr) (addrProtocol addr)
@@ -229,41 +228,11 @@ processPacket pid h pkt sState serverStateRef =
           pure (sState { ssRooms = newRooms }, actions)
       
     CTP_StartDungeon mTank -> do
-      putStrLn $ "[TCP] Client " ++ show pid ++ " requested Dungeon start."
-      -- 1. Get client
-      let client = ssClients sState Map.! pid
-
-      -- 2. Tạo Room ID solo
-      newRoomId <- generateRoomId
-      putStrLn $ "[TCP] Creating solo dungeon " ++ newRoomId ++ " for " ++ show pid
-
-      -- 3. Get spawn point
-      let spawns = ssSpawns sState
-      let spawnPos = if not (null spawns) then spawns !! 0 else Vec2 100 100
-
-      -- 4. TẠO PLAYERSTATE (SỬ DỤNG TANK ĐÃ CHỌN)
-      let selectedTank = fromMaybe Tank.Rapid mTank
-      let playerState = initialPlayerState spawnPos pid selectedTank
-
-      -- 5. Tạo "fake" addr
-      let fakeAddr = SockAddrInet (fromIntegral pid) (tupleToHostAddress (127,0,0,1))
-      let playerStates = Map.singleton fakeAddr playerState
-
-      -- 6. Tạo GameState (với mode PvE)
-      let newRoomGame = initialRoomGameState (ssMap sState) spawns PvE
-      let newRoomGame' = newRoomGame { rgsPlayers = playerStates, rgsMatchState = InProgress }
-      roomGameMVar <- newMVar newRoomGame'
-
-      -- 7. Tạo và lưu Room
-      let newRoom = Room newRoomId (Map.singleton pid client) (Just roomGameMVar)
-      let newRooms = Map.insert newRoomId newRoom (ssRooms sState)
-      let newState = sState { ssRooms = newRooms }
-
-      -- 8. Chuẩn bị actions: fork loop + gửi "starting"
-      let gameLoopAction = forkIO $ gameLoop serverStateRef newRoomId roomGameMVar
-      let clientAction = sendTcpPacket h (STP_GameStarting PvE)
-
-      pure (newState, [void gameLoopAction, clientAction])
+      -- PvE (dungeon) feature is disabled on the server.
+      -- Do not create PvE game state or fork a game loop. Inform client.
+      putStrLn $ "[TCP] Client " ++ show pid ++ " requested Dungeon start, but PvE is disabled."
+      let action = sendTcpPacket h (STP_Kicked "PvE mode is disabled on this server")
+      pure (sState, [action])
 
     CTP_UpdateLobbyState mTank isReady -> do
       let (mRoom, mRoomId) = findRoomByPlayerId pid sState
