@@ -89,23 +89,20 @@ render assets gameMap snapshot effects animRapid animBlast mMyId matchState =
     playerBodyAngle = maybe 0.0 psBodyAngle ourPlayer
     playerTurretAngle = maybe 0.0 psTurretAngle ourPlayer
                         
-    -- Render order: map -> opponents -> vision -> our player -> enemies/bullets/effects
-    -- Note: visionLayer is placed before our player so it masks our view but the player
-    -- body/turret are drawn on top.
     worldLayer = Pictures $
       [ mapPic ] ++
       otherPlayerPics ++
-      [ visionLayer ] ++
-      ourPlayerPic ++
       map drawEnemy (wsEnemies snapshot) ++
       map (drawBullet assets) (wsBullets snapshot) ++
-      map (drawEffect assets) effects
+      map (drawEffect assets) effects ++
+      
+      [ visionLayer ] ++
+      
+      ourPlayerPic
 
-    -- Vignette / vision mask lives in world coordinates at the player's position.
-    -- It doesn't perform an extra rotation; the overall view rotation is applied
-    -- when rendering the world so the vignette will follow the turret.
     visionLayer =
       Translate camX camY $
+      Rotate (radToDeg playerTurretAngle) $
       Scale 1.2 1.2 (resVignetteMask assets)
     
     -- *** ĐÂY LÀ PHẦN ĐÃ SỬA LỖI CÚ PHÁP ***
@@ -119,13 +116,23 @@ render assets gameMap snapshot effects animRapid animBlast mMyId matchState =
           _ -> centeredText red "YOU LOSE!"
 
   in
-    Pictures
-      [ -- Translate the world so the camera/player is centered, then rotate the view
-        -- by the player's turret angle so the viewport turns with the turret.
-        Rotate (radToDeg playerTurretAngle) (Translate (-camX) (-camY) worldLayer)
-      , hudPic
-      , uiOverlay
-      ]
+    -- === THÊM KIỂM TRA (Nothing, InProgress) ===
+    case (ourPlayer, matchState) of
+      -- Nếu game đang chạy nhưng client chưa có state, hiển thị "Connecting..."
+      (Nothing, InProgress) -> 
+        Pictures 
+          [ centeredText white "Connecting..." 
+          , uiOverlay
+          , hudPic
+          ]
+      
+      -- Render game bình thường
+      _ ->
+        Pictures
+          [ Translate (-camX) (-camY) worldLayer
+          , hudPic
+          , uiOverlay
+          ]
   
 drawOurPlayer :: Resources -> PlayerState -> Animation -> Picture
 drawOurPlayer assets ps anim =
