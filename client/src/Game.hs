@@ -58,35 +58,18 @@ updateGame dt gdata =
     moveVec = calculateMoveVector (igsKeys gdata)
     (mouseX, mouseY) = igsMousePos gdata
 
-    -- Compute turret angle in world coordinates.
-    -- The renderer applies: final = Rotate (radToDeg playerTurretAngle) (Translate (-cam) world)
-    -- Mapping from screen (mouse) to world: world = rotate (-playerTurretAngle) mouse + cam
-    -- So we need the player's current position (cam) and current turret angle (from snapshot)
-    players = wsPlayers (igsWorld gdata)
-    mPlayerState = find (\p -> psId p == igsMyId gdata) players
-
-    rotateVec :: Float -> (Float, Float) -> (Float, Float)
-    rotateVec a (vx, vy) =
-      let c = cos a
-          s = sin a
-      in (c * vx - s * vy, s * vx + c * vy)
-
-    (pcAngle, _) = case mPlayerState of
-      Just p ->
-        let camX = vecX $ psPosition p
-            camY = vecY $ psPosition p
-            playerTurret = psTurretAngle p
-            (mx', my') = rotateVec (- playerTurret) (mouseX, mouseY)
-            worldMouseX = mx' + camX
-            worldMouseY = my' + camY
-            mathAngle = atan2 (worldMouseY - camY) (worldMouseX - camX)
-            glossAngle = mathAngle - (pi / 2)
-        in (-glossAngle, True)
-      Nothing ->
-        -- Fallback to previous screen-space behaviour if we don't have player info
-        let mathAngle = atan2 mouseY mouseX
-            glossAngle = mathAngle - (pi / 2)
-        in (-glossAngle, False)
+    -- === SỬA LỖI TÍNH TOÁN GÓC ===
+    -- Vì camera không còn xoay, (mouseX, mouseY) là tọa độ tương đối
+    -- so với người chơi (ở tâm màn hình).
+    (pcAngle, _) = 
+        let 
+          -- Tính góc trực tiếp từ tâm (0,0) đến chuột
+          mathAngle = atan2 mouseY mouseX
+          -- Chuyển đổi từ hệ tọa độ (0 = +X) sang Gloss (0 = +Y)
+          glossAngle = mathAngle - (pi / 2)
+        in
+          -- Gửi góc đã đảo ngược (theo logic render của Gloss)
+          (-glossAngle, True)
 
     command = PlayerCommand
       { pcMoveVec     = moveVec

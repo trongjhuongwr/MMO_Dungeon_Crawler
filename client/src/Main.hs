@@ -112,26 +112,38 @@ renderIO mvar = do
 -- UPDATE CHÍNH (Router)
 updateClientIO :: Float -> MVar ClientState -> IO (MVar ClientState)
 updateClientIO dt mvar = do
-  modifyMVar mvar $ \cState -> do
+
+  -- === BƯỚC 1: Tách State Update và IO ===
+  -- Lấy ra mCommand (nếu có) và cập nhật state bên trong MVar
+  mCommand <- modifyMVar mvar $ \cState -> do
     case (csState cState) of
       S_InGame gdata -> 
-        let (gdata', mCommand) = updateGame dt gdata -- <-- Từ Game.hs
-        in do
-          case mCommand of
-            Just cmd -> sendUdpPacket (csUdpSocket cState) (csServerAddr cState) (CUP_Command cmd)
-            Nothing -> pure ()
-          
-          case (igsMatchState gdata') of
+        let (gdata', mCmd) = updateGame dt gdata -- <-- Từ Game.hs
+        in case (igsMatchState gdata') of
             GameOver mWinnerId ->
               let status = case (Just (igsMyId gdata'), mWinnerId) of
                             (Just myId, Just winnerId) | myId == winnerId -> "YOU WIN!"
                             (Just _, Nothing) -> "DRAW!"
                             _ -> "YOU LOSE!"
-              in pure (cState { csState = S_PostGame (PostGameData status) }, mvar)
+              -- Chuyển sang PostGame VÀ trả ra command (cho frame cuối cùng)
+              in pure (cState { csState = S_PostGame (PostGameData status) }, mCmd)
             _ -> 
-              pure (cState { csState = S_InGame gdata' }, mvar)
+              -- Cập nhật InGame VÀ trả ra command
+              pure (cState { csState = S_InGame gdata' }, mCmd)
       
       -- Khi Pause, không update game, không gửi packet UDP
-      S_Paused _ _ -> pure (cState, mvar)
+      S_Paused _ _ -> pure (cState, Nothing)
       
-      _ -> pure (cState, mvar)
+      _ -> pure (cState, Nothing)
+
+  -- === BƯỚC 2: Thực hiện IO (gửi packet) BÊN NGOÀI MVar ===
+  -- Đọc lại state (chỉ đọc, không khóa) để lấy thông tin socket
+  cState <- readMVar mvar
+  case mCommand of
+    Just cmd -> 
+      sendUdpPacket (csUdpSocket cState) (csServerAddr cState) (CUP_Command cmd)
+    Nothing -> 
+      pure ()
+  
+  -- Trả về MVar
+  return mvar
