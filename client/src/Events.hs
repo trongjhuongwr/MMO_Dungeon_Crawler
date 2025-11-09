@@ -1,4 +1,5 @@
--- file: client/src/Events.hs
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Redundant bracket" #-}
 module Events (handleInputIO) where
 
 import Graphics.Gloss.Interface.IO.Game
@@ -20,6 +21,7 @@ handleInputIO event mvar = do
       S_Menu        -> handleInputMenu event cState
       S_RoomSelection data_ -> handleInputRoomSelection event cState
       S_Lobby data_   -> handleInputLobby event cState
+      S_DungeonLobby _ -> handleInputDungeonLobby event cState
       S_InGame gdata  -> 
         if (igsMatchState gdata == InProgress)
           then pure $ cState { csState = S_InGame (handleInputGame event gdata) }
@@ -56,13 +58,36 @@ handleInputMenu event cState@(ClientState { csTcpHandle = h }) =
           pure cState { csState = S_RoomSelection "" }
       | (x > -100 && x < 100 && y > -85 && y < -35) -> do
           putStrLn "[Input] Clicked Dungeon"
-          sendTcpPacket h CTP_StartDungeon 
-          pure cState 
+          pure cState { csState = S_DungeonLobby Nothing } 
       | (x > -100 && x < 100 && y > -145 && y < -95) -> do
           putStrLn "[Input] Clicked Shop (Disabled)"
           pure cState 
       | otherwise -> pure cState
     _ -> pure cState
+
+handleInputDungeonLobby :: Event -> ClientState -> IO ClientState
+handleInputDungeonLobby event cState@(ClientState { csTcpHandle = h, csState = (S_DungeonLobby mTank) }) =
+  case event of
+    (EventKey (MouseButton LeftButton) Down _ (x, y))
+      -- "Select Rapid"
+      | (x > -200 && x < 0 && y > -25 && y < 25) -> 
+          pure cState { csState = S_DungeonLobby (Just Rapid) }
+      -- "Select Blast"
+      | (x > 0 && x < 200 && y > -25 && y < 25) -> 
+          pure cState { csState = S_DungeonLobby (Just Blast) }
+      -- "Start Dungeon"
+      | (x > -100 && x < 100 && y > -225 && y < -175) -> do 
+          case mTank of
+            Just _ -> do
+              putStrLn $ "[Input] Starting Dungeon with tank: " ++ show mTank
+              sendTcpPacket h (CTP_StartDungeon mTank)
+              pure cState -- Server sẽ chuyển state sang InGame
+            Nothing -> do
+              putStrLn "[Input] Must select a tank first!"
+              pure cState -- Không làm gì nếu chưa chọn tank
+      | otherwise -> pure cState
+    _ -> pure cState
+handleInputDungeonLobby _ cState = pure cState
 
 -- === ROOM SELECTION ===
 handleInputRoomSelection :: Event -> ClientState -> IO ClientState

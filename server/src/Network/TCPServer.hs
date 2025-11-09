@@ -3,6 +3,7 @@
 {-# HLINT ignore "Use unless" #-}
 {-# HLINT ignore "Use head" #-}
 {-# HLINT ignore "Redundant bracket" #-}
+{-# HLINT ignore "Use fewer imports" #-}
 
 module Network.TCPServer (startTcpServer) where
 
@@ -14,7 +15,7 @@ import qualified Data.Map as Map
 import Data.Binary (encode, decode, decodeOrFail)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Int (Int64)
-import Data.Maybe (isJust)
+import Data.Maybe (isJust, fromMaybe)
 -- Sửa: Xóa 'fromJust' không an toàn, chúng ta sẽ dùng pattern matching
 import Data.List (find)
 import Control.Exception (catch, SomeException, bracket)
@@ -226,7 +227,7 @@ processPacket pid h pkt sState serverStateRef =
           let actions = broadcastRoomUpdate updatedRoom -- Lấy list [IO ()]
           pure (sState { ssRooms = newRooms }, actions)
       
-    CTP_StartDungeon -> do
+    CTP_StartDungeon mTank -> do
       putStrLn $ "[TCP] Client " ++ show pid ++ " requested Dungeon start."
       -- 1. Get client
       let client = ssClients sState Map.! pid
@@ -239,8 +240,9 @@ processPacket pid h pkt sState serverStateRef =
       let spawns = ssSpawns sState
       let spawnPos = if not (null spawns) then spawns !! 0 else Vec2 100 100
 
-      -- 4. Tạo PlayerState (Tạm hardcode Tank.Rapid cho Dungeon)
-      let playerState = initialPlayerState spawnPos pid Tank.Rapid
+      -- 4. TẠO PLAYERSTATE (SỬ DỤNG TANK ĐÃ CHỌN)
+      let selectedTank = fromMaybe Tank.Rapid mTank
+      let playerState = initialPlayerState spawnPos pid selectedTank
 
       -- 5. Tạo "fake" addr
       let fakeAddr = SockAddrInet (fromIntegral pid) (tupleToHostAddress (127,0,0,1))

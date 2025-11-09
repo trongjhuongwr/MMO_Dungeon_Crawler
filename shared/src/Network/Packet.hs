@@ -1,4 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use camelCase" #-}
 
 module Network.Packet
   ( -- Client -> Server
@@ -34,7 +36,7 @@ data ClientTcpPacket
   | CTP_UpdateLobbyState (Maybe TankType) Bool -- (Maybe TankType, IsReady)
   | CTP_LeaveRoom
   | CTP_RequestRematch
-  | CTP_StartDungeon
+  | CTP_StartDungeon (Maybe TankType)
   deriving (Show, Generic)
 
 instance Binary ClientTcpPacket
