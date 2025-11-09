@@ -89,17 +89,23 @@ render assets gameMap snapshot effects animRapid animBlast mMyId matchState =
     playerBodyAngle = maybe 0.0 psBodyAngle ourPlayer
     playerTurretAngle = maybe 0.0 psTurretAngle ourPlayer
                         
+    -- Render order: map -> opponents -> vision -> our player -> enemies/bullets/effects
+    -- Note: visionLayer is placed before our player so it masks our view but the player
+    -- body/turret are drawn on top.
     worldLayer = Pictures $
       [ mapPic ] ++
+      otherPlayerPics ++
       [ visionLayer ] ++
-      ourPlayerPic ++ otherPlayerPics ++
+      ourPlayerPic ++
       map drawEnemy (wsEnemies snapshot) ++
       map (drawBullet assets) (wsBullets snapshot) ++
       map (drawEffect assets) effects
-      
+
+    -- Vignette / vision mask lives in world coordinates at the player's position.
+    -- It doesn't perform an extra rotation; the overall view rotation is applied
+    -- when rendering the world so the vignette will follow the turret.
     visionLayer =
       Translate camX camY $
-      Rotate (radToDeg playerTurretAngle) $
       Scale 1.2 1.2 (resVignetteMask assets)
     
     -- *** ĐÂY LÀ PHẦN ĐÃ SỬA LỖI CÚ PHÁP ***
@@ -114,10 +120,11 @@ render assets gameMap snapshot effects animRapid animBlast mMyId matchState =
 
   in
     Pictures
-      [ 
-        Translate (-camX) (-camY) worldLayer
+      [ -- Translate the world so the camera/player is centered, then rotate the view
+        -- by the player's turret angle so the viewport turns with the turret.
+        Rotate (radToDeg playerTurretAngle) (Translate (-camX) (-camY) worldLayer)
       , hudPic
-      , uiOverlay 
+      , uiOverlay
       ]
   
 drawOurPlayer :: Resources -> PlayerState -> Animation -> Picture

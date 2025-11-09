@@ -1,10 +1,6 @@
 module Settings
-  ( -- Config Server
-    serverHost
-  , serverTcpPort
-  , serverUdpPort
-    -- Paths
-  , mapPVP
+  ( -- Paths
+    mapPVP
   , mapDungeon
     -- Helpers
   , texture
@@ -16,19 +12,6 @@ module Settings
 
 import System.FilePath ((</>))
 import Network.Socket (HostName, PortNumber)
-
--- ===================================
--- Server Config
--- ===================================
--- TODO: Đọc từ client.yaml
-serverHost :: HostName
-serverHost = "127.0.0.1"
-
-serverTcpPort :: PortNumber
-serverTcpPort = 4000
-
-serverUdpPort :: String
-serverUdpPort = "8888"
 
 -- ===================================
 -- Asset Paths

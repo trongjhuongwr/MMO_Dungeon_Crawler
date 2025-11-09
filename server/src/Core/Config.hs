@@ -1,6 +1,28 @@
-module Core.Config where
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
-import System.IO (readFile)
+module Core.Config
+  ( AppConfig(..)
+  , loadConfig
+  ) where
 
-loadConfig :: FilePath -> IO String
-loadConfig path = readFile path
+import Data.Yaml
+import GHC.Generics (Generic)
+import Network.Socket (PortNumber)
+
+-- | Định nghĩa cấu trúc của file server.yaml
+data AppConfig = AppConfig
+  { port     :: Int
+  , udpPort  :: Int
+  , tickRate :: Int
+  , mapFile  :: FilePath
+  } deriving (Show, Generic, FromJSON)
+
+-- | Tải config từ một file.
+-- | Sẽ fail nếu file không tồn tại hoặc parse lỗi.
+loadConfig :: FilePath -> IO AppConfig
+loadConfig path = do
+  eConfig <- decodeFileEither path
+  case eConfig of
+    Left err -> fail $ "Failed to load config: " ++ prettyPrintParseException err
+    Right cfg -> pure cfg

@@ -14,7 +14,7 @@ import Control.Exception (catch, SomeException, try, SomeException(..))
 import Core.Types -- Import tất cả type
 import Systems.PhysicsSystem (updatePlayerPhysics, updateBulletPhysics, filterDeadEntities)
 import Systems.CombatSystem (spawnNewBullets, resolveCollisions)
-import Systems.AISystem (updateAI) -- <-- Đã BỎ COMMENT
+-- import Systems.AISystem (updateAI) -- PvE AI disabled
 import Network.Packet
 import Data.Binary (encode)
 
@@ -83,7 +83,8 @@ gameLoop serverStateRef roomId roomStateRef = (forever $ do
 
         InProgress -> do
           let gs' = updatePlayerPhysics dt gs 
-          let gs_ai = if (rgsMode gs' == PvE) then updateAI dt gs' else gs'
+          -- PvE AI disabled: do not call updateAI
+          let gs_ai = gs'
           let gs'' = updateBulletPhysics dt gs_ai
           let gs''' = resolveCollisions gs'' 
           let gs'''' = spawnNewBullets gs''' 
@@ -97,11 +98,8 @@ gameLoop serverStateRef roomId roomStateRef = (forever $ do
                        then (True, fmap psId (find (const True) (Map.elems alivePlayers_PvP)))
                        else (False, Nothing)
                 
-                PvE -> 
-                  let alivePlayers_Dungeon = Map.filter (\p -> psLives p > 0) (rgsPlayers gs_respawned)
-                  in if Map.null alivePlayers_Dungeon
-                       then (True, Nothing)
-                       else (False, Nothing)
+                -- PvE handling disabled: treat non-PvP modes as continuing (no game-over)
+                _ -> (False, Nothing)
           
           if isGameOver
             then do

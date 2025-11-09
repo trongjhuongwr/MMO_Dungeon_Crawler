@@ -49,7 +49,7 @@ renderMenu = Pictures
   [ Color black $ rectangleSolid 800 600 -- Background
   , drawText (-100, 100) 0.4 "MAIN MENU"
   , drawButton (0, 0) "  PvP"
-  , drawButton (0, -60) "  PvE"
+  , Color (greyN 0.5) $ drawButton (0, -60) "PvE (Disabled)"
   , Color (greyN 0.5) $ drawButton (0, -120) "2PvE (Disabled)"
   ]
 

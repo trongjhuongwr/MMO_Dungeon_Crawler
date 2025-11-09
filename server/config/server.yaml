@@ -1,2 +1,4 @@
 port: 4000
+udpPort: 8888
 tickRate: 30
+mapFile: "server/assets/maps/pvp.json"
