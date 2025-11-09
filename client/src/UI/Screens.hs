@@ -60,6 +60,7 @@ renderRoomSelection roomIdInput = Pictures
   , drawButton (0, -60) "Join Room"
   , drawText (-150, -120) 0.2 "Room ID:"
   , drawButton (0, -150) roomIdInput -- Ô nhập liệu Room ID
+  , drawButton (0, -210) "Back"
   ]
 
 renderLobby :: String -> [PlayerInfo] -> Int -> Maybe TankType -> Bool -> Picture
@@ -138,4 +139,5 @@ renderDungeonLobby myTank = Pictures
   , case myTank of
       Just _ -> drawButton (0, -200) "Start PvE"
       Nothing -> Color (greyN 0.5) $ drawButton (0, -200) "Start PvE"
+  , drawButton (0, -260) "Back"
   ]
