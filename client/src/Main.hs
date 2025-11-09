@@ -1,5 +1,6 @@
--- file: client/src/Main.hs
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Redundant bracket" #-}
 module Main where
 
 import Network.Socket hiding (recv, SendTo, RecvFrom)
@@ -79,6 +80,7 @@ renderIO mvar = do
     S_Menu -> pure renderMenu
     S_RoomSelection roomId -> pure $ renderRoomSelection roomId
     S_Lobby (LobbyData rId pInfo myTank myReady) -> pure $ renderLobby rId pInfo (csMyId cState) myTank myReady
+    S_DungeonLobby mTank -> pure $ renderDungeonLobby mTank
     S_InGame gdata -> 
       pure $ render (csResources cState) (igsGameMap gdata) (igsWorld gdata) 
                     (igsEffects gdata) (igsTurretAnimRapid gdata) 

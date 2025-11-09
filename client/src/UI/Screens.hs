@@ -6,6 +6,7 @@ module UI.Screens
   , renderRoomSelection
   , renderLobby
   , renderPostGame
+  , renderDungeonLobby
   ) where
 
 import Graphics.Gloss
@@ -119,4 +120,25 @@ renderPostGame status = Pictures
   , drawText (-100, 100) 0.5 status
   , drawButton (0, 0) "Rematch"
   , drawButton (0, -60) "Exit to Menu"
+  ]
+
+renderDungeonLobby :: Maybe TankType -> Picture
+renderDungeonLobby myTank = Pictures
+  [ Color black $ rectangleSolid 800 600 -- Background
+  , drawText (-200, 150) 0.3 "SELECT TANK"
+
+  -- Nút chọn Tank
+  , let (c1, t1) = if myTank == Just Rapid then (cyan, "Selected") else (white, "Select RAPID")
+    in Color c1 $ drawButton (-100, 0) t1
+  , let (c2, t2) = if myTank == Just Blast then (orange, "Selected") else (white, "Select BLAST")
+    in Color c2 $ drawButton (100, 0) t2
+
+  -- Mô tả Tank
+  , drawText (-300, -80) 0.1 "Rapid: Fast, low damage, 2-shot burst."
+  , drawText (-300, -100) 0.1 "Blast: Slow, high damage, AOE explosion."
+
+  -- Nút Bắt đầu (bị vô hiệu hóa nếu chưa chọn tank)
+  , case myTank of
+      Just _ -> drawButton (0, -200) "Start Dungeon"
+      Nothing -> Color (greyN 0.5) $ drawButton (0, -200) "Start Dungeon"
   ]

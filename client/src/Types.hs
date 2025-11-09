@@ -1,3 +1,6 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use camelCase" #-}
+{-# HLINT ignore "Use newtype instead of data" #-}
 module Types
   ( InGameState(..)
   , LoginData(..)
@@ -62,6 +65,7 @@ data AppState
   | S_Menu                  -- Menu chính (Nút Start)
   | S_RoomSelection String  -- (String là RoomID đang nhập)
   | S_Lobby    LobbyData    -- Sảnh chờ (Tạo/Vào phòng)
+  | S_DungeonLobby (Maybe TankType)
   | S_InGame   InGameState  -- Trạng thái game (ClientState cũ)
   | S_PostGame PostGameData -- Màn hình kết thúc (Chơi lại/Thoát)
 
