@@ -88,6 +88,19 @@ renderIO mvar = do
                     (igsMatchState gdata)
     S_PostGame (PostGameData status) -> pure $ renderPostGame status
 
+    S_Paused gdata isConfirming -> do
+      -- 1. Vẽ lại game state y như cũ
+      let gamePic = render (csResources cState) (igsGameMap gdata) (igsWorld gdata) 
+                           (igsEffects gdata) (igsTurretAnimRapid gdata) 
+                           (igsTurretAnimBlast gdata) (Just $ igsMyId gdata) 
+                           (igsMatchState gdata)
+      -- 2. Vẽ lớp phủ làm mờ
+      let dimOverlay = Color (makeColor 0 0 0 0.5) $ rectangleSolid 800 600
+      -- 3. Vẽ menu
+      let menuPic = renderPauseMenu isConfirming
+      
+      pure $ Pictures [gamePic, dimOverlay, menuPic]
+
 -- UPDATE CHÍNH (Router)
 updateClientIO :: Float -> MVar ClientState -> IO (MVar ClientState)
 updateClientIO dt mvar = do
@@ -109,5 +122,8 @@ updateClientIO dt mvar = do
               in pure (cState { csState = S_PostGame (PostGameData status) }, mvar)
             _ -> 
               pure (cState { csState = S_InGame gdata' }, mvar)
+      
+      -- Khi Pause, không update game, không gửi packet UDP
+      S_Paused _ _ -> pure (cState, mvar)
       
       _ -> pure (cState, mvar)

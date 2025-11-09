@@ -23,6 +23,7 @@ import Types.Enemy (EnemyState)
 import Types.MatchState (MatchState)
 import Types.Tank (TankType)
 import Data.Maybe (Maybe)
+import Types.GameMode (GameMode)
 
 -- ===================================================================
 -- GÓI TIN TỪ CLIENT GỬI LÊN SERVER
@@ -37,6 +38,7 @@ data ClientTcpPacket
   | CTP_LeaveRoom
   | CTP_RequestRematch
   | CTP_StartDungeon (Maybe TankType)
+  | CTP_PauseGame Bool
   deriving (Show, Generic)
 
 instance Binary ClientTcpPacket
@@ -57,7 +59,7 @@ instance Binary ClientUdpPacket
 data ServerTcpPacket
   = STP_LoginResult Bool Int String -- (success, yourPlayerId, message)
   | STP_RoomUpdate String [PlayerInfo] -- (roomId, list of players in room)
-  | STP_GameStarting
+  | STP_GameStarting GameMode
   | STP_ShowMenu -- Yêu cầu client quay về menu
   | STP_Kicked String                -- (reason: "Room not found", "Room full", etc.)
   deriving (Show, Generic)
