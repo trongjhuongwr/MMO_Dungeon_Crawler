@@ -11,6 +11,7 @@ import Network.Client (sendTcpPacket) -- Module Network/Client.hs mới
 import Types.Tank (TankType(..))
 import Network.Packet (ClientTcpPacket(..))
 import Core.Animation (startAnimation)
+import Types.GameMode (GameMode(..))
 
 -- INPUT CHÍNH (Router)
 handleInputIO :: Event -> MVar ClientState -> IO (MVar ClientState)
@@ -23,12 +24,26 @@ handleInputIO event mvar = do
       S_Lobby data_   -> handleInputLobby event cState
       S_DungeonLobby _ -> handleInputDungeonLobby event cState
       S_InGame gdata  -> 
-        if (igsMatchState gdata == InProgress)
-          then pure $ cState { csState = S_InGame (handleInputGame event gdata) }
-          else case (igsMatchState gdata) of
-                (GameOver _) -> handleInputPostGame event cState
-                _ -> pure cState 
+        case event of
+          -- <--- LOGIC BẮT PHÍM ESC Ở ĐÂY
+          (EventKey (SpecialKey KeyEsc) Down _ _) ->
+            if (igsMode gdata == PvE) -- Chỉ cho phép pause PvE
+            then do
+              putStrLn "[Input] Pausing PvE game"
+              sendTcpPacket (csTcpHandle cState) (CTP_PauseGame True)
+              pure cState { csState = S_Paused gdata False } -- Chuyển sang state Paused
+            else 
+              pure cState -- Không làm gì ở PvP
+          
+          -- Xử lý input game bình thường
+          _ -> if (igsMatchState gdata == InProgress)
+                 then pure $ cState { csState = S_InGame (handleInputGame event gdata) }
+                 else case (igsMatchState gdata) of
+                        (GameOver _) -> handleInputPostGame event cState
+                        _ -> pure cState 
+      
       S_PostGame data_ -> handleInputPostGame event cState
+      S_Paused gdata isConfirming -> handleInputPaused event cState
   return mvar
 
 -- === LOGIN ===
@@ -166,3 +181,48 @@ handleInputGame event gdata =
     EventMotion pos ->
       gdata { igsMousePos = pos }
     _ -> gdata
+
+-- === PAUSE MENU ===
+handleInputPaused :: Event -> ClientState -> IO ClientState
+handleInputPaused event cState@(ClientState { csTcpHandle = h, csState = (S_Paused gdata isConfirming) }) =
+  case (isConfirming, event) of
+    
+    -- --- Đang ở màn hình xác nhận ---
+    (True, EventKey (MouseButton LeftButton) Down _ (x, y))
+      -- Nút "Yes, Exit" (x = -100)
+      | (x > -200 && x < 0 && y > -125 && y < -75) -> do
+          putStrLn "[Input] Confirmed Exit to Menu."
+          sendTcpPacket h (CTP_PauseGame False) -- Gửi unpause (dù server sẽ tự xử lý khi LeaveRoom)
+          sendTcpPacket h CTP_LeaveRoom
+          pure cState { csState = S_Menu }
+      -- Nút "No, Cancel" (x = 100)
+      | (x > 0 && x < 200 && y > -125 && y < -75) -> do
+          putStrLn "[Input] Cancelled Exit."
+          pure cState { csState = S_Paused gdata False } -- Quay lại menu pause
+      | otherwise -> pure cState
+
+    -- --- Đang ở menu pause chính ---
+    (False, EventKey (SpecialKey KeyEsc) Down _ _) -> do -- Nhấn Esc để Continue
+      putStrLn "[Input] Resuming game (Esc)"
+      sendTcpPacket h (CTP_PauseGame False)
+      pure cState { csState = S_InGame gdata }
+
+    (False, EventKey (MouseButton LeftButton) Down _ (x, y))
+      -- Nút "Continue" (y = 100)
+      | (x > -100 && x < 100 && y > 75 && y < 125) -> do
+          putStrLn "[Input] Resuming game (Button)"
+          sendTcpPacket h (CTP_PauseGame False)
+          pure cState { csState = S_InGame gdata }
+      -- Nút "Settings" (y = 40)
+      | (x > -100 && x < 100 && y > 15 && y < 65) -> do
+          putStrLn "[Input] Settings (Disabled)"
+          pure cState
+      -- Nút "Exit to Menu" (y = -20)
+      | (x > -100 && x < 100 && y > -45 && y < 5) -> do
+          putStrLn "[Input] Requesting Exit to Menu..."
+          pure cState { csState = S_Paused gdata True } -- Chuyển sang màn hình xác nhận
+      | otherwise -> pure cState
+
+    -- Bất kỳ input nào khác thì bỏ qua
+    _ -> pure cState
+handleInputPaused _ cState = pure cState -- Fallback

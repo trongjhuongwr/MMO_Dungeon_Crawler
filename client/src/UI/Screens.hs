@@ -7,6 +7,7 @@ module UI.Screens
   , renderLobby
   , renderPostGame
   , renderDungeonLobby
+  , renderPauseMenu
   ) where
 
 import Graphics.Gloss
@@ -141,3 +142,19 @@ renderDungeonLobby myTank = Pictures
       Nothing -> Color (greyN 0.5) $ drawButton (0, -200) "Start PvE"
   , drawButton (0, -260) "Back"
   ]
+
+renderPauseMenu :: Bool -> Picture
+renderPauseMenu isConfirmingExit =
+  if isConfirmingExit
+    then Pictures
+      [ drawText (-250, 50) 0.3 "Exit to Menu?"
+      , drawText (-300, 0) 0.2 "All progress in this run will be lost."
+      , drawButton (-100, -100) "Yes, Exit"
+      , drawButton (100, -100) "No, Cancel"
+      ]
+    else Pictures
+      [ drawText (-100, 200) 0.4 "PAUSED"
+      , drawButton (0, 100) "Continue"
+      , Color (greyN 0.5) $ drawButton (0, 40) "Settings (Disabled)"
+      , drawButton (0, -20) "Exit to Menu"
+      ]

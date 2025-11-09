@@ -26,6 +26,7 @@ import Core.Effect (Effect)
 import Core.Animation (Animation)
 import Input (KeyMap)
 import Renderer.Resources (Resources)
+import Types.GameMode (GameMode)
 
 -- ===================================================================
 -- KIỂU DỮ LIỆU STATE MÁY
@@ -43,7 +44,8 @@ data InGameState = InGameState
   , igsTurretAnimRapid   :: Animation 
   , igsTurretAnimBlast   :: Animation 
   , igsMyId              :: Int
-  , igsMatchState        :: MatchState 
+  , igsMatchState        :: MatchState
+  , igsMode              :: GameMode
   }
 
 -- Dữ liệu cho màn hình Login
@@ -68,6 +70,7 @@ data AppState
   | S_DungeonLobby (Maybe TankType)
   | S_InGame   InGameState  -- Trạng thái game (ClientState cũ)
   | S_PostGame PostGameData -- Màn hình kết thúc (Chơi lại/Thoát)
+  | S_Paused   InGameState Bool
 
 -- TRẠNG THÁI CLIENT TOÀN CỤC
 data ClientState = ClientState

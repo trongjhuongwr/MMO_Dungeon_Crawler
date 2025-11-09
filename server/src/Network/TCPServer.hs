@@ -32,6 +32,7 @@ import qualified Utils.Random as Rnd (getRandomNumber)
 import qualified Data.ByteString as BS 
 import qualified Data.ByteString as BS (hPut)
 import Data.ByteString.Lazy.Internal (fromStrict, toStrict)
+import Types.GameMode (GameMode(..))
 
 -- Hàm tiện ích để gửi gói tin TCP (an toàn)
 sendTcpPacket :: Handle -> ServerTcpPacket -> IO ()
@@ -248,8 +249,8 @@ processPacket pid h pkt sState serverStateRef =
       let fakeAddr = SockAddrInet (fromIntegral pid) (tupleToHostAddress (127,0,0,1))
       let playerStates = Map.singleton fakeAddr playerState
 
-      -- 6. Tạo GameState (với mode Dungeon)
-      let newRoomGame = initialRoomGameState (ssMap sState) spawns Dungeon
+      -- 6. Tạo GameState (với mode PvE)
+      let newRoomGame = initialRoomGameState (ssMap sState) spawns PvE
       let newRoomGame' = newRoomGame { rgsPlayers = playerStates, rgsMatchState = InProgress }
       roomGameMVar <- newMVar newRoomGame'
 
@@ -260,7 +261,7 @@ processPacket pid h pkt sState serverStateRef =
 
       -- 8. Chuẩn bị actions: fork loop + gửi "starting"
       let gameLoopAction = forkIO $ gameLoop serverStateRef newRoomId roomGameMVar
-      let clientAction = sendTcpPacket h STP_GameStarting
+      let clientAction = sendTcpPacket h (STP_GameStarting PvE)
 
       pure (newState, [void gameLoopAction, clientAction])
 
@@ -313,7 +314,7 @@ processPacket pid h pkt sState serverStateRef =
                   let gameLoopAction = forkIO $ gameLoop serverStateRef roomId roomGameMVar
                   
                   -- 3. Lấy actions broadcast
-                  let broadcastActions = broadcastToRoom finalRoom (STP_GameStarting)
+                  let broadcastActions = broadcastToRoom finalRoom (STP_GameStarting PvP)
                   
                   -- 4. Gộp actions, chuyển `forkIO` thành `IO ()` bằng `void`
                   let allActions = void gameLoopAction : broadcastActions
@@ -332,15 +333,47 @@ processPacket pid h pkt sState serverStateRef =
               in pure (sState { ssRooms = newRooms }, actions)
         _ -> pure (sState, []) -- Không tìm thấy phòng
 
+    CTP_PauseGame isPaused -> do
+      let (mRoom, mRoomId) = findRoomByPlayerId pid sState
+      case (mRoom, mRoomId) of
+        (Just room, Just roomId) ->
+          case roomGame room of
+            Just gameMVar -> do
+              -- Tạo một IO action để cập nhật MVar của game
+              let action = modifyMVar_ gameMVar $ \rgs -> do
+                    if (rgsMode rgs == PvE)
+                      then do
+                        putStrLn $ "[GameLoop " ++ roomId ++ "] Setting Paused: " ++ show isPaused
+                        pure $ rgs { rgsIsPaused = isPaused }
+                      else 
+                        pure rgs -- Không cho phép pause PvP
+              pure (sState, [action])
+            _ -> pure (sState, []) -- Game không chạy
+        _ -> pure (sState, []) -- Không tìm thấy phòng
+
     CTP_LeaveRoom -> do
       let (mRoom, mRoomId) = findRoomByPlayerId pid sState
       case (mRoom, mRoomId) of
         (Just room, Just roomId) -> do
+          -- TỰ ĐỘNG UNPAUSE KHI RỜI PHÒNG
+          let unpauseAction = case roomGame room of
+                Just gameMVar -> [modifyMVar_ gameMVar (\rgs -> pure rgs { rgsIsPaused = False })]
+                Nothing -> []
+
           let newPlayers = Map.delete pid (roomPlayers room)
           let updatedRoom = room { roomPlayers = newPlayers }
-          let actions = broadcastRoomUpdate updatedRoom
-          pure (sState { ssRooms = Map.insert roomId updatedRoom (ssRooms sState) }, actions)
-        _ -> pure (sState, []) 
+
+          if Map.null newPlayers
+            then do
+              putStrLn $ "[TCP] Room " ++ roomId ++ " is empty. Deleting."
+              let newState = sState { ssClients = Map.delete pid (ssClients sState), ssRooms = Map.delete roomId (ssRooms sState) }
+              pure (newState, unpauseAction) -- Chạy unpause
+            else do
+              let newRooms = Map.insert roomId updatedRoom (ssRooms sState)
+              let newState = sState { ssClients = Map.delete pid (ssClients sState), ssRooms = newRooms }
+              let actions = broadcastRoomUpdate updatedRoom ++ unpauseAction -- Gộp actions
+              pure (newState, actions)
+        _ -> pure (sState { ssClients = Map.delete pid (ssClients sState) }, []) -- Rời khỏi sảnh (không ở trong phòng) 
 
     CTP_RequestRematch -> do
       -- TODO: Xử lý logic rematch (hiện tại chưa làm gì)

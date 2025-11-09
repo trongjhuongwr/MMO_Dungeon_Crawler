@@ -14,12 +14,7 @@ import Types.MatchState (MatchState(..))
 import Network.Packet (PlayerInfo) 
 import System.IO (Handle)
 import Control.Concurrent.MVar (MVar)
-
--- ================================================================
--- TRẠNG THÁI CỦA MỘT TRẬN ĐẤU (GAMEPLAY)
--- ================================================================
-data GameMode = PvP | Dungeon
-  deriving (Eq, Show)
+import Types.GameMode (GameMode(..))
 
 data RoomGameState = RoomGameState
   { rgsTick     :: Int
@@ -32,6 +27,7 @@ data RoomGameState = RoomGameState
   , rgsSpawns   :: [Vec2]
   , rgsMatchState :: MatchState
   , rgsMode     :: GameMode
+  , rgsIsPaused :: Bool
   }
 
 data Command = Command SockAddr PlayerCommand
@@ -48,6 +44,7 @@ initialRoomGameState loadedMap spawnPoints mode = RoomGameState
   , rgsSpawns = spawnPoints
   , rgsMatchState = Waiting
   , rgsMode = mode
+  , rgsIsPaused = False
   }
 
 initialPlayerState :: Vec2 -> Int -> TankType -> PlayerState

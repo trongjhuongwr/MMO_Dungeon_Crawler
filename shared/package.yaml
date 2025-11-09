@@ -33,3 +33,4 @@ library:
     - Types.Bullet
     - Types.Enemy
     - Types.MatchState
+    - Types.GameMode
