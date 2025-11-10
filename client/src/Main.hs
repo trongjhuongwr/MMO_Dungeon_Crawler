@@ -87,7 +87,7 @@ renderIO mvar = do
   case (csState cState) of
     S_Login loginData -> pure $ renderLogin loginData
     S_Menu -> pure renderMenu
-    S_RoomSelection roomId -> pure $ renderRoomSelection roomId
+    S_RoomSelection rsd -> pure $ renderRoomSelection rsd
     S_Lobby (LobbyData rId pInfo myTank myReady) -> pure $ renderLobby rId pInfo (csMyId cState) myTank myReady
     S_DungeonLobby mTank -> pure $ renderDungeonLobby mTank
     S_InGame gdata -> 

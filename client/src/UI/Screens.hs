@@ -16,7 +16,7 @@ import Types.Tank (TankType(..))
 import Data.Maybe (isJust, fromJust)
 import Data.List (find)
 import qualified Data.Set as Set
-import Types (PostGameData(..), LoginData(..), ActiveField(..))
+import Types (PostGameData(..), LoginData(..), ActiveField(..), RoomSelectionData(..))
 
 -- === HÀM TIỆN ÍCH VẼ ===
 
@@ -71,15 +71,16 @@ renderMenu = Pictures
   , Color (greyN 0.5) $ drawButton (0, -120) "2PvE (Disabled)"
   ]
 
-renderRoomSelection :: String -> Picture
-renderRoomSelection roomIdInput = Pictures
-  [ Color black $ rectangleSolid 800 600   -- Background
+renderRoomSelection :: RoomSelectionData -> Picture
+renderRoomSelection rsd = Pictures
+  [ Color black $ rectangleSolid 800 600
   , drawText (-150, 100) 0.3 "PVP LOBBY"
   , drawButton (0, 0) "Create Room"
   , drawButton (0, -60) "Join Room"
   , drawText (-150, -120) 0.2 "Room ID:"
-  , drawButton (0, -150) roomIdInput       -- Ô nhập liệu Room ID
+  , drawButton (0, -150) (rsdRoomId rsd) 
   , drawButton (0, -210) "Back"
+  , Translate (-200) (-250) $ Scale 0.15 0.15 $ Color red $ Text (rsdError rsd)
   ]
 
 renderLobby :: String -> [PlayerInfo] -> Int -> Maybe TankType -> Bool -> Picture

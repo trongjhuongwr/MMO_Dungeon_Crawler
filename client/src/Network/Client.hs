@@ -160,7 +160,14 @@ tcpListenLoop h mvar = loop LBS.empty
                     pure cState { csState = S_InGame newInGameState }
                 
               STP_Kicked msg ->
-                pure cState { csState = S_Login (LoginData "" "" msg UserField) }
+                case (csState cState) of
+                  -- Nếu bị "kick" khi đang ở màn hình chọn phòng,
+                  -- có nghĩa là Join thất bại. Hiển thị lỗi.
+                  S_RoomSelection rsd -> 
+                    pure cState { csState = S_RoomSelection (rsd { rsdError = msg }) }
+
+                  _ -> 
+                    pure cState { csState = S_Menu }
               
               STP_ShowMenu ->
                 pure cState { csState = S_Menu }

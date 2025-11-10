@@ -104,7 +104,7 @@ handleInputMenu event cState@(ClientState { csTcpHandle = h }) =
     EventKey (MouseButton LeftButton) Down _ (x, y)
       | x > -100 && x < 100 && y > -25 && y < 25 -> do
           putStrLn "[Input] Clicked Start PvP"
-          pure cState { csState = S_RoomSelection "" }
+          pure cState { csState = S_RoomSelection (RoomSelectionData "" "") }
       | x > -100 && x < 100 && y > -85 && y < -35 -> do
           putStrLn "[Input] Clicked Start PvE (disabled)"
           -- PvE feature is disabled client-side; do not enter dungeon lobby
@@ -140,25 +140,32 @@ handleInputDungeonLobby _ cState = pure cState
 
 -- === ROOM SELECTION ===
 handleInputRoomSelection :: Event -> ClientState -> IO ClientState
-handleInputRoomSelection event cState@(ClientState { csTcpHandle = h, csState = (S_RoomSelection roomId) }) =
-  case event of
+handleInputRoomSelection event cState@(ClientState { csTcpHandle = h, csState = (S_RoomSelection rsd) }) =
+  let roomId = rsdRoomId rsd -- Lấy room ID cũ
+  in case event of
     (EventKey (Char c) Down _ _) -> 
-      pure cState { csState = S_RoomSelection (roomId ++ [c]) }
+      pure cState { csState = S_RoomSelection (rsd { rsdRoomId = roomId ++ [c] }) }
+
     (EventKey (SpecialKey KeyBackspace) Down _ _) -> 
-      pure cState { csState = S_RoomSelection (if null roomId then "" else init roomId) }
+      pure cState { csState = S_RoomSelection (rsd { rsdRoomId = if null roomId then "" else init roomId }) }
+
     (EventKey (MouseButton LeftButton) Down _ (x, y))
+      -- Create Room (xóa lỗi cũ nếu có)
       | (x > -100 && x < 100 && y > -25 && y < 25) -> do 
           sendTcpPacket h CTP_CreateRoom
-          pure cState
+          pure cState { csState = S_RoomSelection (rsd { rsdError = "" }) }
+
+      -- Join Room (xóa lỗi cũ khi thử join)
       | (x > -100 && x < 100 && y > -85 && y < -35) -> do 
           sendTcpPacket h (CTP_JoinRoom roomId)
-          pure cState
-      -- VÙNG CLICK NÚT "BACK" (cho y = -210)
+          pure cState { csState = S_RoomSelection (rsd { rsdError = "" }) }
+
+      -- Back to Menu (xóa lỗi cũ)
       | (x > -100 && x < 100 && y > -235 && y < -185) -> do
           putStrLn "[Input] Back to Menu"
           pure cState { csState = S_Menu }
     _ -> pure cState
-handleInputRoomSelection _ cState = pure cState
+handleInputRoomSelection _ cState = pure cState -- Fallback
 
 -- === LOBBY ===
 handleInputLobby :: Event -> ClientState -> IO ClientState
