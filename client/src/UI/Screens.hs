@@ -84,7 +84,7 @@ renderLobby roomId players myId myTank myReady = Pictures
   , drawText (-100, -120) 0.1 "Blast: Slow, high damage, AOE explosion."
     
   -- Nút Sẵn sàng
-  , let (c3, t3) = if myReady then (green, "READY") else (red, "Not Ready")
+  , let (c3, t3) = if myReady then (green, "NOT READY") else (red, "READY")
     in Color c3 $ drawButton (0, -200) t3
   ]
   where
@@ -110,7 +110,7 @@ renderLobby roomId players myId myTank myReady = Pictures
         [ Color (greyN 0.1) $ Translate x y $ rectangleSolid 180 100
         , Translate (x-80) (y+30) $ Scale 0.2 0.2 $ Color selfColor $ Text name
         , Translate (x-80) (y) $ Scale 0.15 0.15 $ Color white $ Text ("Tank: " ++ tank)
-        , Translate (x-80) (y-30) $ Scale 0.15 0.15 $ Color (if ready then green else red) $ Text (if ready then "Not Ready" else "Ready")
+        , Translate (x-80) (y-30) $ Scale 0.15 0.15 $ Color (if ready then green else red) $ Text (if ready then "Ready" else "Not Ready")
         ]
 
 renderPostGame :: String -> Picture
