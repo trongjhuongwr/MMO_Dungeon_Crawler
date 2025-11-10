@@ -24,7 +24,7 @@ dependencies:
   - yaml
   - random
   - text
-  - postgresql-simple
+  - sqlite-simple
   - bcrypt
 
 # Phần thư viện của server (chứa logic game)

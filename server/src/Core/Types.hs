@@ -16,7 +16,7 @@ import Network.Packet (PlayerInfo)
 import System.IO (Handle)
 import Control.Concurrent.MVar (MVar)
 import Types.GameMode (GameMode(..))
-import Database.PostgreSQL.Simple (Connection)
+import Database.SQLite.Simple (Connection)
 
 data RoomGameState = RoomGameState
   { rgsTick     :: Int

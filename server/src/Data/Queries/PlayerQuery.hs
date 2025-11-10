@@ -4,8 +4,8 @@ module Data.Queries.PlayerQuery
   , authenticateUser
   ) where
 
-import Database.PostgreSQL.Simple (Connection, Only(..), query)
-import Database.PostgreSQL.Simple.FromRow (FromRow(..), field)
+import Database.SQLite.Simple (Connection, Only(..), query, execute, lastInsertRowId, FromRow(..), field)
+
 import Crypto.BCrypt (hashPasswordUsingPolicy, slowerBcryptHashingPolicy, validatePassword)
 import qualified Data.ByteString.Char8 as BS
 import Data.Text (Text)
@@ -33,8 +33,11 @@ registerUser conn user pass = do
         Nothing -> pure $ Left "Server error: Could not hash password"
         Just hashedPass -> do
           -- 3. Thêm user vào DB
-          [Only newId] <- query conn "INSERT INTO players (username, password_hash) VALUES (?, ?) RETURNING id" (userT, hashedPass)
-          pure $ Right newId
+          execute conn "INSERT INTO players (username, password_hash) VALUES (?, ?)" (userT, hashedPass)
+          -- Lấy ID của hàng vừa được chèn
+          newId64 <- lastInsertRowId conn
+          -- Chuyển đổi từ Int64 (mặc định của thư viện) sang Int
+          pure $ Right (fromIntegral newId64)
 
 -- | Xác thực user
 authenticateUser :: Connection -> String -> String -> IO (Maybe (Int, Text))

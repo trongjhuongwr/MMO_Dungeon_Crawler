@@ -19,7 +19,7 @@ import Data.Int (Int64)
 import Data.Maybe (isJust, fromMaybe, isNothing)
 import Data.List (find)
 import Control.Exception (catch, SomeException, bracket, try)
-import Database.PostgreSQL.Simple (Connection) -- DB
+import Database.SQLite.Simple (Connection) -- DB
 import Data.Queries.PlayerQuery (registerUser, authenticateUser) -- DB
 import qualified Data.Text as T 
 
