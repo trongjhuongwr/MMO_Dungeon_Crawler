@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.37.0.
+-- This file has been generated from package.yaml by hpack version 0.38.1.
 --
 -- see: https://github.com/sol/hpack
 
@@ -50,6 +50,7 @@ library
     , containers
     , filepath
     , network
+    , random
     , shared
     , yaml
   default-language: Haskell2010
@@ -73,6 +74,7 @@ executable mmo-server
     , containers
     , filepath
     , network
+    , random
     , server
     , shared
     , yaml

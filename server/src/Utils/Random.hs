@@ -1,4 +1,6 @@
 module Utils.Random where
 
+import System.Random (randomRIO)
+
 getRandomNumber :: IO Int
-getRandomNumber = return 4 -- Chosen by fair dice roll.
+getRandomNumber = randomRIO (1000, 9999) -- Tạo số ngẫu nhiên 4 chữ số
