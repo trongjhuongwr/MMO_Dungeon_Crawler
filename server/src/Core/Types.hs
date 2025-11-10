@@ -1,5 +1,5 @@
 module Core.Types
-  ( module Core.Types -- Export tất cả mọi thứ
+  ( module Core.Types
   ) where
 
 import Network.Socket (SockAddr, Socket)
@@ -9,7 +9,8 @@ import Types.Bullet (BulletState(..))
 import Types.Enemy (EnemyState(..))
 import Types.Map (GameMap)
 import Types.Tank (TankType) 
-import qualified Data.Map as Map  
+import qualified Data.Map as Map
+import qualified Data.Set as Set
 import Types.MatchState (MatchState(..))
 import Network.Packet (PlayerInfo) 
 import System.IO (Handle)
@@ -72,7 +73,8 @@ data PlayerClient = PlayerClient
 data Room = Room
   { roomMsgId   :: String 
   , roomPlayers :: Map.Map Int PlayerClient 
-  , roomGame    :: Maybe (MVar RoomGameState) 
+  , roomGame    :: Maybe (MVar RoomGameState)
+  , roomRematchRequests :: Set.Set Int
   }
 
 data ServerState = ServerState
