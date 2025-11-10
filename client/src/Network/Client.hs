@@ -3,6 +3,7 @@
 {-# HLINT ignore "Use fewer imports" #-}
 {-# HLINT ignore "Redundant as" #-}
 {-# HLINT ignore "Redundant bracket" #-}
+{-# HLINT ignore "Use unless" #-}
 module Network.Client
   ( connectTcp
   , sendTcpPacket
@@ -34,11 +35,12 @@ import qualified Data.Set as Set
 import Core.Animation (Animation(..))
 
 import Types
-import Game (updateSnapshot, initialWorldSnapshot, dummyAnim) -- Module Game.hs mới
+import Game (updateSnapshot, initialWorldSnapshot, dummyAnim)
 import Systems.MapLoader (loadMapFromFile) 
 import Renderer.Resources (Resources(..))
 import qualified Settings as Settings
 import Types.GameMode (GameMode(..))
+import qualified Data.Set as Set
 
 connectTcp :: HostName -> PortNumber -> String -> IO (Handle, Socket, SockAddr)
 connectTcp host tcpPort udpPortString = do
@@ -109,7 +111,7 @@ tcpListenLoop h mvar = loop LBS.empty
               STP_LoginResult success pid msg ->
                 if success
                 then pure cState { csMyId = pid, csState = S_Menu }
-                else pure cState { csState = S_Login (LoginData "" msg) }
+                else pure cState { csState = S_Login (LoginData "" "" msg UserField) }
                 
               STP_RoomUpdate roomId pInfos ->
                 let myInfo = find (\p -> piId p == csMyId cState) pInfos
@@ -158,10 +160,17 @@ tcpListenLoop h mvar = loop LBS.empty
                     pure cState { csState = S_InGame newInGameState }
                 
               STP_Kicked msg ->
-                pure cState { csState = S_Login (LoginData "" msg) }
+                pure cState { csState = S_Login (LoginData "" "" msg UserField) }
               
               STP_ShowMenu ->
                 pure cState { csState = S_Menu }
+
+              STP_RematchUpdate requesterIds ->
+                case (csState cState) of
+                  S_PostGame pgData ->
+                    let newSet = Set.fromList requesterIds
+                    in pure cState { csState = S_PostGame (pgData { pgRematchRequesters = newSet }) }
+                  _ -> pure cState -- Bỏ qua nếu không ở màn hình PostGame
           
           if LBS.null remaining
             then loop remaining 

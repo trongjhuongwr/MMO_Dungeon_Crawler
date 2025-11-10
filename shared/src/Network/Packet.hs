@@ -31,7 +31,8 @@ import Types.GameMode (GameMode)
 
 -- Gói tin TCP (Dùng cho Login, Lobby, Quản lý phòng)
 data ClientTcpPacket
-  = CTP_Login String String -- (username, password) - Tạm thời chỉ dùng username
+  = CTP_Login String String -- (username, password)
+  | CTP_Register String String -- (username, password)
   | CTP_CreateRoom
   | CTP_JoinRoom String     -- (roomId)
   | CTP_UpdateLobbyState (Maybe TankType) Bool -- (Maybe TankType, IsReady)
@@ -57,11 +58,12 @@ instance Binary ClientUdpPacket
 
 -- Gói tin TCP (Dùng cho Login, Lobby, Quản lý phòng)
 data ServerTcpPacket
-  = STP_LoginResult Bool Int String -- (success, yourPlayerId, message)
+  = STP_LoginResult Bool Int String    -- (success, yourPlayerId, message)
   | STP_RoomUpdate String [PlayerInfo] -- (roomId, list of players in room)
-  | STP_GameStarting GameMode
-  | STP_ShowMenu -- Yêu cầu client quay về menu
-  | STP_Kicked String                -- (reason: "Room not found", "Room full", etc.)
+  | STP_GameStarting GameMode          -- Thông báo bắt đầu game (với chế độ chơi)
+  | STP_ShowMenu                       -- Yêu cầu client quay về menu
+  | STP_Kicked String                  -- (reason: "Room not found", "Room full", etc.)
+  | STP_RematchUpdate [Int]            -- Danh sách playerId của những người chơi đồng ý đấu lại
   deriving (Show, Generic)
 
 instance Binary ServerTcpPacket

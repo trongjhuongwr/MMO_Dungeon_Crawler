@@ -4,6 +4,7 @@
 module Types
   ( InGameState(..)
   , LoginData(..)
+  , ActiveField(..)
   , LobbyData(..)
   , PostGameData(..)
   , AppState(..)
@@ -32,7 +33,7 @@ import Types.GameMode (GameMode)
 -- KIỂU DỮ LIỆU STATE MÁY
 -- ===================================================================
 
--- Trạng thái khi đang trong game (ClientState cũ)
+-- Trạng thái khi đang trong game
 data InGameState = InGameState
   { igsKeys              :: KeyMap
   , igsMousePos          :: (Float, Float)
@@ -48,18 +49,28 @@ data InGameState = InGameState
   , igsMode              :: GameMode
   }
 
+data ActiveField = UserField | PassField deriving (Eq, Show)
+
 -- Dữ liệu cho màn hình Login
-data LoginData = LoginData { ldUsername :: String, ldStatus :: String }
+data LoginData = LoginData 
+  { ldUsername :: String
+  , ldPassword :: String
+  , ldStatus :: String
+  , ldActiveField :: ActiveField
+  }
 
 -- Dữ liệu cho sảnh chờ
 data LobbyData = LobbyData 
   { ldRoomId :: String
-  , ldPlayers :: [PlayerInfo] -- Lấy từ server (chứa lựa chọn của đối thủ)
+  , ldPlayers :: [PlayerInfo]  -- Lấy từ server (chứa lựa chọn của đối thủ)
   , ldMyTank :: Maybe TankType -- Lựa chọn của bản thân
-  , ldMyReady :: Bool         -- Trạng thái sẵn sàng của bản thân
+  , ldMyReady :: Bool          -- Trạng thái sẵn sàng của bản thân
   }
 
-data PostGameData = PostGameData { pgStatus :: String }
+data PostGameData = PostGameData 
+  { pgStatus :: String 
+  , pgRematchRequesters :: Set.Set Int
+  }
 
 -- Trạng thái của toàn bộ ứng dụng
 data AppState

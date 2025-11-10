@@ -16,6 +16,7 @@ import Network.UDPServer (udpListenLoop)
 import Network.TCPServer (startTcpServer) 
 import Systems.MapLoader (loadMapFromFile) 
 import Types.Common (Vec2(..))
+import Data.Database (connectDb)
 
 runServer :: IO ()
 runServer = withSocketsDo $ do
@@ -23,33 +24,37 @@ runServer = withSocketsDo $ do
   hSetEncoding stderr utf8
 
   putStrLn "Starting MMO Dungeon Crawler server..."
-  
-  -- Tải config
+
   config <- loadConfig "server/config/server.yaml"
   putStrLn $ "Config loaded: " ++ show config
-  
-  let mapToLoad = mapFile config -- <--- SỬA
+
+  -- Kết nối DB
+  putStrLn "Connecting to database..."
+  dbConn <- connectDb
+  putStrLn "Database connected."
+
+  let mapToLoad = mapFile config
   
   putStrLn $ "Loading map: " ++ mapToLoad
   eMapData <- loadMapFromFile mapToLoad
   
   case eMapData of
-    Left err -> putStrLn $ "FATAL: Không thể tải map: " ++ err
+    Left err -> fail $ "FATAL: Cann't load map: " ++ err
     Right (loadedMap, spawnPoints) -> do
       
       putStrLn $ "Map loaded. Spawn points: " ++ show (length spawnPoints)
       
       -- Khởi động UDP Server (dùng port từ config)
       sockUDP <- socket AF_INET Datagram defaultProtocol
-      bind sockUDP (SockAddrInet (fromIntegral $ udpPort config) 0) -- <--- SỬA
-      putStrLn $ "[UDP Server] Listening on port " ++ show (udpPort config) -- <--- SỬA
+      bind sockUDP (SockAddrInet (fromIntegral $ udpPort config) 0)
+      putStrLn $ "[UDP Server] Listening on port " ++ show (udpPort config)
 
-      -- Tạo ServerState (SỬA: Thêm config vào đây)
-      let sState = initialServerState sockUDP loadedMap spawnPoints
+      -- Tạo ServerState
+      let sState = initialServerState sockUDP loadedMap spawnPoints dbConn
       serverStateRef <- newMVar sState
 
       -- Khởi động TCP Server (truyền config vào)
-      _ <- forkIO $ startTcpServer config serverStateRef -- <--- SỬA
+      _ <- forkIO $ startTcpServer config serverStateRef
       
       -- Khởi động UDP Listener
       _ <- forkIO $ udpListenLoop sockUDP serverStateRef

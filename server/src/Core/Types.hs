@@ -1,5 +1,5 @@
 module Core.Types
-  ( module Core.Types -- Export tất cả mọi thứ
+  ( module Core.Types
   ) where
 
 import Network.Socket (SockAddr, Socket)
@@ -9,12 +9,14 @@ import Types.Bullet (BulletState(..))
 import Types.Enemy (EnemyState(..))
 import Types.Map (GameMap)
 import Types.Tank (TankType) 
-import qualified Data.Map as Map  
+import qualified Data.Map as Map
+import qualified Data.Set as Set
 import Types.MatchState (MatchState(..))
 import Network.Packet (PlayerInfo) 
 import System.IO (Handle)
 import Control.Concurrent.MVar (MVar)
 import Types.GameMode (GameMode(..))
+import Database.SQLite.Simple (Connection)
 
 data RoomGameState = RoomGameState
   { rgsTick     :: Int
@@ -28,6 +30,7 @@ data RoomGameState = RoomGameState
   , rgsMatchState :: MatchState
   , rgsMode     :: GameMode
   , rgsIsPaused :: Bool
+  , rgsCurrentTime :: Float
   }
 
 data Command = Command SockAddr PlayerCommand
@@ -45,6 +48,7 @@ initialRoomGameState loadedMap spawnPoints mode = RoomGameState
   , rgsMatchState = Waiting
   , rgsMode = mode
   , rgsIsPaused = False
+  , rgsCurrentTime = 0.0
   }
 
 initialPlayerState :: Vec2 -> Int -> TankType -> PlayerState
@@ -57,6 +61,7 @@ initialPlayerState spawnPos playerId tankType = PlayerState
   , psHealth = 100
   , psTankType = tankType
   , psLives = 3
+  , psLastFireTime = 0.0
   }
 
 -- ================================================================
@@ -72,7 +77,8 @@ data PlayerClient = PlayerClient
 data Room = Room
   { roomMsgId   :: String 
   , roomPlayers :: Map.Map Int PlayerClient 
-  , roomGame    :: Maybe (MVar RoomGameState) 
+  , roomGame    :: Maybe (MVar RoomGameState)
+  , roomRematchRequests :: Set.Set Int
   }
 
 data ServerState = ServerState
@@ -81,15 +87,17 @@ data ServerState = ServerState
   , ssNextPlayerId :: Int
   , ssUdpSocket :: Socket 
   , ssMap       :: GameMap 
-  , ssSpawns    :: [Vec2]    
+  , ssSpawns    :: [Vec2]
+  , ssDbConn    :: Connection
   }
 
-initialServerState :: Socket -> GameMap -> [Vec2] -> ServerState
-initialServerState sock gmap spawns = ServerState
+initialServerState :: Socket -> GameMap -> [Vec2] -> Connection -> ServerState
+initialServerState sock gmap spawns dbConn = ServerState
   { ssClients = Map.empty
   , ssRooms = Map.empty
   , ssNextPlayerId = 1
   , ssUdpSocket = sock
   , ssMap = gmap
   , ssSpawns = spawns
+  , ssDbConn = dbConn
   }

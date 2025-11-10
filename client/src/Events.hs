@@ -6,8 +6,8 @@ import Graphics.Gloss.Interface.IO.Game
 import Control.Concurrent (MVar, modifyMVar_)
 import qualified Data.Set as Set
 
-import Types -- Module Types.hs mới
-import Network.Client (sendTcpPacket) -- Module Network/Client.hs mới
+import Types
+import Network.Client (sendTcpPacket)
 import Types.Tank (TankType(..))
 import Network.Packet (ClientTcpPacket(..))
 import Core.Animation (startAnimation)
@@ -50,18 +50,52 @@ handleInputIO event mvar = do
 handleInputLogin :: Event -> ClientState -> IO ClientState
 handleInputLogin event cState@(ClientState { csTcpHandle = h, csState = (S_Login ld) }) =
   case event of
+    -- Xử lý gõ phím
     (EventKey (Char c) Down _ _) -> 
-      pure cState { csState = S_Login ld { ldUsername = ldUsername ld ++ [c] } }
-    (EventKey (SpecialKey KeyBackspace) Down _ _) -> 
-      pure cState { csState = S_Login ld { ldUsername = if null (ldUsername ld) then "" else init (ldUsername ld) } }
-    (EventKey (MouseButton LeftButton) Down _ (x, y)) ->
-      if (x > -120 && x < 80 && y > -175 && y < -125) 
-      then do
-        sendTcpPacket h (CTP_Login (ldUsername ld) "")
-        pure cState { csState = S_Login ld { ldStatus = "Logging in..." } }
-      else pure cState
+      pure $ cState { csState = S_Login updateField }
+      where 
+        updateField = case ldActiveField ld of
+                        UserField -> ld { ldUsername = ldUsername ld ++ [c] }
+                        PassField -> ld { ldPassword = ldPassword ld ++ [c] }
+
+    -- Xử lý Backspace
+    (EventKey (SpecialKey KeyBackspace) Down _ _) ->
+      pure $ cState { csState = S_Login (updateField) }
+      where 
+        updateField = case ldActiveField ld of
+          UserField -> ld { ldUsername = if null (ldUsername ld) then "" else init (ldUsername ld) }
+          PassField -> ld { ldPassword = if null (ldPassword ld) then "" else init (ldPassword ld) }
+
+    -- Xử lý phím Tab
+    (EventKey (SpecialKey KeyTab) Down _ _) ->
+      pure $ cState { csState = S_Login (toggleField) }
+      where
+        toggleField = case ldActiveField ld of
+                        UserField -> ld { ldActiveField = PassField }
+                        PassField -> ld { ldActiveField = UserField }
+
+    -- Xử lý Click chuột
+    (EventKey (MouseButton LeftButton) Down _ (x, y))
+      -- Click vào ô Username
+      | (x > -20 && x < 180 && y > 25 && y < 75) ->
+          pure cState { csState = S_Login (ld { ldActiveField = UserField }) }
+      -- Click vào ô Password
+      | (x > -20 && x < 180 && y > -55 && y < -5) ->
+          pure cState { csState = S_Login (ld { ldActiveField = PassField }) }
+
+      -- Click nút Login (x = -100)
+      | (x > -200 && x < 0 && y > -175 && y < -125) -> do
+          sendTcpPacket h (CTP_Login (ldUsername ld) (ldPassword ld))
+          pure cState { csState = S_Login ld { ldStatus = "Logging in..." } }
+
+      -- Click nút Register (x = 100)
+      | (x > 0 && x < 200 && y > -175 && y < -125) -> do
+          sendTcpPacket h (CTP_Register (ldUsername ld) (ldPassword ld))
+          pure cState { csState = S_Login ld { ldStatus = "Registering..." } }
+
+      | otherwise -> pure cState
     _ -> pure cState
-handleInputLogin _ cState = pure cState 
+handleInputLogin _ cState = pure cState
 
 -- === MAIN MENU ===
 handleInputMenu :: Event -> ClientState -> IO ClientState
@@ -97,7 +131,7 @@ handleInputDungeonLobby event cState@(ClientState { csTcpHandle = h, csState = (
           putStrLn "[Input] Start Dungeon pressed, but PvE is disabled."
           pure cState
       -- VÙNG CLICK NÚT "BACK" (cho y = -260)
-      | (x > -100 && x < 100 && y > -285 && y < -235) -> do -- <--- THÊM LOGIC NÀY
+      | (x > -100 && x < 100 && y > -285 && y < -235) -> do
           putStrLn "[Input] Back to Menu"
           pure cState { csState = S_Menu }
       | otherwise -> pure cState
@@ -120,7 +154,7 @@ handleInputRoomSelection event cState@(ClientState { csTcpHandle = h, csState = 
           sendTcpPacket h (CTP_JoinRoom roomId)
           pure cState
       -- VÙNG CLICK NÚT "BACK" (cho y = -210)
-      | (x > -100 && x < 100 && y > -235 && y < -185) -> do -- <--- THÊM LOGIC NÀY
+      | (x > -100 && x < 100 && y > -235 && y < -185) -> do
           putStrLn "[Input] Back to Menu"
           pure cState { csState = S_Menu }
     _ -> pure cState
@@ -148,16 +182,29 @@ handleInputLobby _ cState = pure cState
 
 -- === POST GAME ===
 handleInputPostGame :: Event -> ClientState -> IO ClientState
-handleInputPostGame event cState@(ClientState { csTcpHandle = h }) =
+handleInputPostGame event cState@(ClientState { csTcpHandle = h, csState = (S_PostGame pgData) }) =
   case event of
     (EventKey (MouseButton LeftButton) Down _ (x, y))
-      | (x > -100 && x < 100 && y > -25 && y < 25) -> do -- "Rematch"
-          sendTcpPacket h CTP_RequestRematch
-          pure cState 
+      -- Nút "Rematch" (y = 0)
+      | (x > -100 && x < 100 && y > -25 && y < 25) -> do 
+          -- Chỉ gửi nếu chúng ta chưa yêu cầu
+          if Set.notMember (csMyId cState) (pgRematchRequesters pgData)
+            then do
+              putStrLn "[Input] Requesting Rematch..."
+              sendTcpPacket h CTP_RequestRematch
+              -- Cập nhật UI ngay lập tức (tạm thời)
+              let newSet = Set.insert (csMyId cState) (pgRematchRequesters pgData)
+              pure cState { csState = S_PostGame (pgData { pgRematchRequesters = newSet }) }
+            else 
+              pure cState -- Không làm gì nếu đã click
+              
+      -- Nút "Exit to Menu" (y = -60)
       | (x > -100 && x < 100 && y > -85 && y < -35) -> do -- "Exit to Menu"
+          putStrLn "[Input] Exiting to Menu."
           sendTcpPacket h CTP_LeaveRoom
           pure cState { csState = S_Menu } 
     _ -> pure cState
+handleInputPostGame _ cState = pure cState -- Fallback
 
 -- === IN GAME ===
 handleInputGame :: Event -> InGameState -> InGameState

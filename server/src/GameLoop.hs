@@ -11,7 +11,7 @@ import Data.Maybe (Maybe(..))
 import System.IO (hSetEncoding, stdout, stderr, utf8) 
 import Control.Exception (catch, SomeException, try, SomeException(..))
 
-import Core.Types -- Import tất cả type
+import Core.Types
 import Systems.PhysicsSystem (updatePlayerPhysics, updateBulletPhysics, filterDeadEntities)
 import Systems.CombatSystem (spawnNewBullets, resolveCollisions)
 -- import Systems.AISystem (updateAI) -- PvE AI disabled
@@ -19,8 +19,8 @@ import Network.Packet
 import Data.Binary (encode)
 
 import qualified Data.ByteString.Lazy as LBS
-import qualified Data.ByteString as BS (ByteString) -- <--- SỬA 1: Import kiểu ByteString (strict)
-import qualified Network.Socket.ByteString as BS (sendTo) -- <--- SỬA 2: Giữ nguyên import sendTo
+import qualified Data.ByteString as BS (ByteString)
+import qualified Network.Socket.ByteString as BS (sendTo)
 import Data.ByteString.Lazy.Internal (toStrict)
 
 import Types.Player (PlayerState(..)) 
@@ -34,7 +34,7 @@ tickRate = 30
 tickInterval :: Int
 tickInterval = 1000000 `div` tickRate
 
--- (Hàm respawnDeadPlayers của anh đã đúng, giữ nguyên)
+-- Respawn player nếu chết và còn mạng
 respawnDeadPlayers :: RoomGameState -> RoomGameState
 respawnDeadPlayers gs =
   let
@@ -82,12 +82,13 @@ gameLoop serverStateRef roomId roomStateRef = (forever $ do
           pure (gs { rgsMatchState = InProgress }, [])
 
         InProgress -> do
-          let gs' = updatePlayerPhysics dt gs 
+          let gs_with_time = gs { rgsCurrentTime = rgsCurrentTime gs + dt }
+          let gs' = updatePlayerPhysics dt gs_with_time
           -- PvE AI disabled: do not call updateAI
           let gs_ai = gs'
           let gs'' = updateBulletPhysics dt gs_ai
           let gs''' = resolveCollisions gs'' 
-          let gs'''' = spawnNewBullets gs''' 
+          let gs'''' = spawnNewBullets (rgsCurrentTime gs_with_time) gs'''
           let gs_filtered_entities = filterDeadEntities gs''''
           let gs_respawned = respawnDeadPlayers gs_filtered_entities
           
@@ -127,7 +128,7 @@ gameLoop serverStateRef roomId roomStateRef = (forever $ do
           pure (gs, [(packet, Map.keys (rgsPlayers gs))])
       
       -- 3. GỬI PACKETS (BÊN NGOÀI 'case')
-      sState <- readMVar serverStateRef -- <-- SỬA LỖI: Lấy sState
+      sState <- readMVar serverStateRef
       sendPackets sState packetsToSend
       
       -- 4. CẬP NHẬT STATE VÀ NGỦ
@@ -146,7 +147,7 @@ gameLoop serverStateRef roomId roomStateRef = (forever $ do
 
   -- === HÀM HELPER (ĐỊNH NGHĨA TRONG 'where') ===
   where
-    -- HÀM MỚI: Gửi gói tin
+    -- Gửi gói tin
     sendPackets :: ServerState -> [(ServerUdpPacket, [SockAddr])] -> IO ()
     sendPackets sState packetsToSend = do
       let sock = ssUdpSocket sState
@@ -157,20 +158,20 @@ gameLoop serverStateRef roomId roomStateRef = (forever $ do
         mapM_ (sendPacketInternal sock strictPkt) targetAddrs
         ) packetsToSend
 
-    -- HÀM MỚI: Hàm con của sendPackets, bắt lỗi
-    sendPacketInternal :: Socket -> BS.ByteString -> SockAddr -> IO () -- <--- SỬA 3: Đổi BS.ByteString -> ByteString
+    -- Hàm con của sendPackets, bắt lỗi
+    sendPacketInternal :: Socket -> BS.ByteString -> SockAddr -> IO ()
     sendPacketInternal sock strictPkt addr = 
       (void $ BS.sendTo sock strictPkt addr) `catch` \(e :: SomeException) -> do
         putStrLn $ "[UDP] Failed to send packet to " ++ show addr ++ ": " ++ show e
         pure () -- Bỏ qua lỗi và tiếp tục
 
-    -- HÀM MỚI: Kiểm tra game over
+    -- Kiểm tra game over
     isMatchOver :: RoomGameState -> Bool
     isMatchOver gs = case rgsMatchState gs of
       GameOver _ -> True
       _          -> False
 
-    -- HÀM MỚI: Dừng vòng lặp
+    -- Dừng vòng lặp
     breakLoop :: MVar ServerState -> String -> IO ()
     breakLoop serverStateRef roomId = do
       putStrLn $ "[GameLoop " ++ roomId ++ "] Match finished. Stopping game loop."

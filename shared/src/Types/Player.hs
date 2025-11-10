@@ -15,6 +15,7 @@ data PlayerState = PlayerState
   , psHealth      :: Int
   , psTankType    :: TankType
   , psLives       :: Int
+  , psLastFireTime :: Float
   } deriving (Show, Generic)
 
 instance Binary PlayerState
