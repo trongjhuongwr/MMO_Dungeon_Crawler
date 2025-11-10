@@ -15,6 +15,8 @@ import Network.Packet (PlayerInfo(..))
 import Types.Tank (TankType(..))
 import Data.Maybe (isJust, fromJust)
 import Data.List (find)
+import qualified Data.Set as Set
+import Types (PostGameData(..))
 
 -- === HÀM TIỆN ÍCH VẼ ===
 
@@ -34,19 +36,19 @@ drawText (x, y) size text = Translate x y $ Scale size size $ Color white $ Text
 
 renderLogin :: String -> String -> Picture
 renderLogin username status = Pictures
-  [ Color black $ rectangleSolid 800 600 -- Background
+  [ Color black $ rectangleSolid 800 600   -- Background
   , drawText (-80, 150) 0.3 "LOGIN"
   , drawText (-200, 40) 0.2 "Username:"
-  , drawButton (80, 50) username -- Ô nhập liệu
+  , drawButton (80, 50) username           -- Ô nhập liệu
   , drawText (-200, -40) 0.2 "Password:"
-  , drawButton (80, -30) "********" -- Ô nhập liệu mật khẩu
+  , drawButton (80, -30) "********"        -- Ô nhập liệu mật khẩu
   , drawButton (-20, -150) "  Submit"
   , drawText (-80, -200) 0.1 status
   ]
 
 renderMenu :: Picture
 renderMenu = Pictures
-  [ Color black $ rectangleSolid 800 600 -- Background
+  [ Color black $ rectangleSolid 800 600   -- Background
   , drawText (-100, 100) 0.4 "MAIN MENU"
   , drawButton (0, 0) "  PvP"
   , Color (greyN 0.5) $ drawButton (0, -60) "PvE (Disabled)"
@@ -55,18 +57,18 @@ renderMenu = Pictures
 
 renderRoomSelection :: String -> Picture
 renderRoomSelection roomIdInput = Pictures
-  [ Color black $ rectangleSolid 800 600 -- Background
+  [ Color black $ rectangleSolid 800 600   -- Background
   , drawText (-150, 100) 0.3 "PVP LOBBY"
   , drawButton (0, 0) "Create Room"
   , drawButton (0, -60) "Join Room"
   , drawText (-150, -120) 0.2 "Room ID:"
-  , drawButton (0, -150) roomIdInput -- Ô nhập liệu Room ID
+  , drawButton (0, -150) roomIdInput       -- Ô nhập liệu Room ID
   , drawButton (0, -210) "Back"
   ]
 
 renderLobby :: String -> [PlayerInfo] -> Int -> Maybe TankType -> Bool -> Picture
 renderLobby roomId players myId myTank myReady = Pictures
-  [ Color black $ rectangleSolid 800 600 -- Background
+  [ Color black $ rectangleSolid 800 600   -- Background
   , drawText (-350, 250) 0.2 ("Room ID: " ++ roomId)
   
   -- Thông tin người chơi
@@ -113,11 +115,21 @@ renderLobby roomId players myId myTank myReady = Pictures
         , Translate (x-80) (y-30) $ Scale 0.15 0.15 $ Color (if ready then green else red) $ Text (if ready then "Ready" else "Not Ready")
         ]
 
-renderPostGame :: String -> Picture
-renderPostGame status = Pictures
+renderPostGame :: PostGameData -> Int -> Picture
+renderPostGame (PostGameData status requesters) myId = Pictures
   [ Color black $ rectangleSolid 800 600 -- Background
   , drawText (-100, 100) 0.5 status
-  , drawButton (0, 0) "Rematch"
+  
+  -- Logic cho nút Rematch
+  , let
+      (buttonPic, helpText) = if Set.member myId requesters
+        then (Color (greyN 0.5) (drawButton (0, 0) "Waiting..."), "Waiting for opponent...")
+        else (drawButton (0, 0) "Rematch", "")
+    in Pictures 
+      [ buttonPic
+      , drawText (-150, -25) 0.1 helpText
+      ]
+      
   , drawButton (0, -60) "Exit to Menu"
   ]
 

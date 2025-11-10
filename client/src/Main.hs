@@ -21,6 +21,7 @@ import Game
 import Network.Client
 import Events
 import Network.Packet (ClientUdpPacket(..))
+import qualified Data.Set as Set
 
 -- ===================================================================
 -- HÀM MAIN VÀ KHỞI TẠO
@@ -72,7 +73,7 @@ main = withSocketsDo $ do
             black 60
             clientStateRef
             renderIO
-            handleInputIO -- <-- Từ Events.hs
+            handleInputIO
             updateClientIO
 
 -- ===================================================================
@@ -94,7 +95,7 @@ renderIO mvar = do
                     (igsEffects gdata) (igsTurretAnimRapid gdata) 
                     (igsTurretAnimBlast gdata) (Just $ igsMyId gdata) 
                     (igsMatchState gdata)
-    S_PostGame (PostGameData status) -> pure $ renderPostGame status
+    S_PostGame pgData -> pure $ renderPostGame pgData (csMyId cState)
 
     S_Paused gdata isConfirming -> do
       -- 1. Vẽ lại game state y như cũ
@@ -126,7 +127,7 @@ updateClientIO dt mvar = do
                             (Just _, Nothing) -> "DRAW!"
                             _ -> "YOU LOSE!"
               -- Chuyển sang PostGame VÀ trả ra command (cho frame cuối cùng)
-              in pure (cState { csState = S_PostGame (PostGameData status) }, mCmd)
+              in pure (cState { csState = S_PostGame (PostGameData status Set.empty) }, mCmd)
             _ -> 
               -- Cập nhật InGame VÀ trả ra command
               pure (cState { csState = S_InGame gdata' }, mCmd)
