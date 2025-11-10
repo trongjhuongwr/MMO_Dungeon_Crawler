@@ -88,7 +88,7 @@ gameLoop serverStateRef roomId roomStateRef = (forever $ do
           let gs_ai = gs'
           let gs'' = updateBulletPhysics dt gs_ai
           let gs''' = resolveCollisions gs'' 
-          let gs'''' = spawnNewBullets gs''' 
+          let gs'''' = spawnNewBullets (rgsCurrentTime gs_with_time) gs'''
           let gs_filtered_entities = filterDeadEntities gs''''
           let gs_respawned = respawnDeadPlayers gs_filtered_entities
           

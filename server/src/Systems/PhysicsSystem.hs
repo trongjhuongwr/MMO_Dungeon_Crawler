@@ -14,6 +14,8 @@ import Network.Socket (SockAddr)
 import qualified Data.Map as Map
 import qualified Data.Array as Array
 import Data.List (nub) 
+import Types.Tank (TankType(..))
+import qualified Types.Tank as Tank
 
 playerTurnSpeed :: Float
 playerTurnSpeed = 1.5
