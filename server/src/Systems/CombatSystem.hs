@@ -168,8 +168,8 @@ damagePlayers damageList playersMap =
         then player 
         else
           let damage = case bulletType of
-                         Bullet.Normal -> 5
-                         Bullet.Blast  -> 20
+                         Bullet.Normal -> 4
+                         Bullet.Blast  -> 25
               newHealth = psHealth player - damage
           in 
             if newHealth <= 0

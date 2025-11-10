@@ -104,7 +104,7 @@ updatePlayerMovement dt gmap ps moveVec =
     forwardVec = Vec2 (sin newBodyAngle) (cos newBodyAngle)
 
     baseSpeed = if psTankType ps == Tank.Blast
-                  then 60.0  -- Tốc độ Tank Blast
+                  then 70.0  -- Tốc độ Tank Blast
                   else 100.0 -- Tốc độ Tank Rapid
                   
     effectiveSpeed = if throttle < 0 then baseSpeed * (1.0/3.0) else baseSpeed
