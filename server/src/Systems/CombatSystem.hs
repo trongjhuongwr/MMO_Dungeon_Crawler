@@ -3,7 +3,7 @@
 
 module Systems.CombatSystem (spawnNewBullets, resolveCollisions) where
 
-import Core.Types (RoomGameState(..), Command(..)) -- << SỬA DÒNG NÀY
+import Core.Types (RoomGameState(..), Command(..))
 import Types.Player (PlayerState(..), PlayerCommand(..))
 import Types.Bullet (BulletState(..))
 import qualified Types.Bullet as Bullet
@@ -19,59 +19,75 @@ bulletSpeed :: Float
 bulletSpeed = 300.0
 
 bulletLifetime :: Float
-bulletLifetime = 1.0
+bulletLifetime = 2.0
 
--- << SỬA CHỮ KÝ HÀM
+rapidCooldown :: Float
+rapidCooldown = 0.2 -- 0.2 giây (5 viên/giây)
+
+blastCooldown :: Float
+blastCooldown = 1.0 -- 1.0 giây (1 viên/giây)
+
 resolveCollisions :: RoomGameState -> RoomGameState
 resolveCollisions = checkCollisions
 
--- << SỬA CHỮ KÝ HÀM
-spawnNewBullets :: RoomGameState -> RoomGameState
-spawnNewBullets gs =
+spawnNewBullets :: Float -> RoomGameState -> RoomGameState
+spawnNewBullets currentTime gs =
   let
     (gsWithNewBullets, newNextId) =
-      go (rgsCommands gs) (rgsPlayers gs) (rgsNextId gs) gs -- << SỬA
+      go (rgsCommands gs) (rgsNextId gs) gs
   in
     gsWithNewBullets { rgsNextId = newNextId }
   where
-    go :: [Command] -> Map.Map SockAddr PlayerState -> Int -> RoomGameState -> (RoomGameState, Int) -- << SỬA
-    go [] _ nextId currentGs = (currentGs, nextId)
-    go (Command addr (PlayerCommand _ _ False) : cmds) players nextId currentGs =
-      go cmds players nextId currentGs
-    go (Command addr (PlayerCommand _ _ True) : cmds) players nextId currentGs =
-      case Map.lookup addr players of
-        Nothing -> go cmds players nextId currentGs
-        Just player ->
-          let
-            angle = psTurretAngle player
-            vel = Vec2 (sin angle) (cos angle) *^ bulletSpeed
-            pos = psPosition player + (vel *^ 0.05)
-            
-            newBulletType = case psTankType player of
-                              Tank.Rapid -> Bullet.Normal
-                              Tank.Blast -> Bullet.Blast
-            
-            newBullet = BulletState
-              { bsId = nextId
-              , bsOwnerId = psId player
-              , bsBulletType = newBulletType 
-              , bsPosition = pos
-              , bsVelocity = vel
-              , bsLifetime = bulletLifetime
-              }
-            
-            newGameState = currentGs { rgsBullets = newBullet : rgsBullets currentGs } -- << SỬA
-            newNextId = nextId + 1
-          in
-            go cmds players newNextId newGameState
+    go :: [Command] -> Int -> RoomGameState -> (RoomGameState, Int)
+    go [] nextId currentGs = (currentGs, nextId)
+    go (Command addr (PlayerCommand _ _ False) : cmds) nextId currentGs =
+      go cmds nextId currentGs
+    go (Command addr (PlayerCommand _ _ True) : cmds) nextId currentGs =
+      let
+        players = rgsPlayers currentGs
+      in
+        case Map.lookup addr players of
+          Nothing -> go cmds nextId currentGs -- Player không tồn tại
+          Just player ->
+            let
+              (cooldown, bulletType) = case psTankType player of
+                                         Tank.Rapid -> (rapidCooldown, Bullet.Normal)
+                                         Tank.Blast -> (blastCooldown, Bullet.Blast)
+              
+              canFire = (currentTime - psLastFireTime player) > cooldown
+            in
+              if not canFire
+                then go cmds nextId currentGs -- Vẫn đang cooldown
+                else
+                  -- Bắn!
+                  let
+                    angle = psTurretAngle player
+                    vel = Vec2 (sin angle) (cos angle) *^ bulletSpeed
+                    pos = psPosition player + (vel *^ 0.05)
+                    
+                    newBullet = BulletState
+                      { bsId = nextId
+                      , bsOwnerId = psId player
+                      , bsBulletType = bulletType
+                      , bsPosition = pos
+                      , bsVelocity = vel
+                      , bsLifetime = bulletLifetime
+                      }
+                    
+                    -- Cập nhật thời gian bắn cuối cùng
+                    updatedPlayer = player { psLastFireTime = currentTime }
+                    newPlayers = Map.insert addr updatedPlayer players
+                    newGameState = currentGs { rgsBullets = newBullet : rgsBullets currentGs, rgsPlayers = newPlayers }
+                    newNextId = nextId + 1
+                  in
+                    go cmds newNextId newGameState
 
--- << SỬA CHỮ KÝ HÀM
 checkCollisions :: RoomGameState -> RoomGameState
 checkCollisions gs =
   let
-    bullets = rgsBullets gs -- << SỬA
-    enemies = rgsEnemies gs -- << SỬA
-    players = rgsPlayers gs -- << SỬA
+    bullets = rgsBullets gs
+    enemies = rgsEnemies gs
+    players = rgsPlayers gs
     
     (collidedBulletIds_Enemies, collidedEnemyIds) = findEnemyCollisions bullets enemies
     
@@ -83,9 +99,9 @@ checkCollisions gs =
     remainingEnemies = map (damageEnemy collidedEnemyIds) enemies
 
   in
-    gs { rgsBullets = remainingBullets -- << SỬA
-       , rgsEnemies = remainingEnemies -- << SỬA
-       , rgsPlayers = updatedPlayersMap -- << SỬA
+    gs { rgsBullets = remainingBullets
+       , rgsEnemies = remainingEnemies
+       , rgsPlayers = updatedPlayersMap
        }
 
 damageEnemy :: [Int] -> EnemyState -> EnemyState
@@ -153,7 +169,7 @@ damagePlayers damageList playersMap =
         else
           let damage = case bulletType of
                          Bullet.Normal -> 5
-                         Bullet.Blast  -> 15
+                         Bullet.Blast  -> 20
               newHealth = psHealth player - damage
           in 
             if newHealth <= 0
