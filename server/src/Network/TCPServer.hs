@@ -18,6 +18,7 @@ import qualified Data.ByteString.Lazy as LBS
 import Data.Int (Int64)
 import Data.Maybe (isJust, fromMaybe)
 import Data.List (find)
+import Data.List (sortOn)
 import Control.Exception (catch, SomeException, bracket)
 
 import Core.Types
@@ -247,7 +248,8 @@ processPacket pid h pkt sState serverStateRef =
           let updatedRoom = room { roomPlayers = newPlayers }
           let newRooms = Map.insert roomId updatedRoom (ssRooms sState)
           
-          let (gameCanStart, pInfos) = checkGameStart updatedRoom
+          let (gameCanStart, pInfos_unsorted) = checkGameStart updatedRoom
+          let pInfos = sortOn piId pInfos_unsorted -- Sắp xếp theo ID
           if gameCanStart
             then do
               putStrLn $ "[TCP] Room " ++ roomId ++ " is starting game!"
