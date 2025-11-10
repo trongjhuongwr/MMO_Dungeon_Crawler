@@ -374,7 +374,7 @@ processPacket pid h pkt sState serverStateRef =
                                                   else spawns !! (pId `mod` length spawns)
                     
                     -- Reset state cho từng người chơi (giữ nguyên địa chỉ UDP)
-                    let resetPlayerState p = p { psHealth = 100, psLives = 3, psPosition = getSpawnPos (psId p) (rgsSpawns rgs) }
+                    let resetPlayerState p = p { psHealth = 100, psLives = 3, psPosition = getSpawnPos (psId p) (rgsSpawns rgs), psLastFireTime = 0.0 }
                     let newPlayerStates = Map.map resetPlayerState (rgsPlayers rgs)
 
                     -- Tạo game state mới sạch

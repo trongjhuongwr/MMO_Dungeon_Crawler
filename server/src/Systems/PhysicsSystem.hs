@@ -4,7 +4,7 @@
 {-# HLINT ignore "Use const" #-}
 module Systems.PhysicsSystem (updatePlayerPhysics, updateBulletPhysics, filterDeadEntities) where
 
-import Core.Types (RoomGameState(..), Command(..)) -- << SỬA DÒNG NÀY
+import Core.Types (RoomGameState(..), Command(..))
 import Types.Player (PlayerState(..), PlayerCommand(..))
 import Types.Common (Vec2(..), (*^), vecLength)
 import Types.Bullet (BulletState(..))
@@ -14,9 +14,6 @@ import Network.Socket (SockAddr)
 import qualified Data.Map as Map
 import qualified Data.Array as Array
 import Data.List (nub) 
-
-playerSpeed :: Float
-playerSpeed = 100.0
 
 playerTurnSpeed :: Float
 playerTurnSpeed = 1.5
@@ -71,13 +68,12 @@ isPositionColliding gmap pos =
   in
     any (isTileSolidAtGrid gmap) gridCoords
 
--- << SỬA CHỮ KÝ HÀM
 updatePlayerPhysics :: Float -> RoomGameState -> RoomGameState
 updatePlayerPhysics dt gs =
   let
-    gameMap = rgsMap gs -- << SỬA
-    cmdMap = Map.fromListWith (\new _ -> new) [(addr, cmd) | (Command addr cmd) <- rgsCommands gs] -- << SỬA
-    updatedPlayers = Map.mapWithKey (applyCommand dt gameMap) (rgsPlayers gs) -- << SỬA
+    gameMap = rgsMap gs
+    cmdMap = Map.fromListWith (\new _ -> new) [(addr, cmd) | (Command addr cmd) <- rgsCommands gs]
+    updatedPlayers = Map.mapWithKey (applyCommand dt gameMap) (rgsPlayers gs)
     
     applyCommand :: Float -> GameMap -> SockAddr -> PlayerState -> PlayerState
     applyCommand dt gmap addr ps =
@@ -104,7 +100,12 @@ updatePlayerMovement dt gmap ps moveVec =
     
     throttle = vecY moveVec
     forwardVec = Vec2 (sin newBodyAngle) (cos newBodyAngle)
-    effectiveSpeed = if throttle < 0 then playerSpeed * (1.0/3.0) else playerSpeed
+
+    baseSpeed = if psTankType ps == Tank.Blast
+                  then 60.0  -- Tốc độ Tank Blast
+                  else 100.0 -- Tốc độ Tank Rapid
+                  
+    effectiveSpeed = if throttle < 0 then baseSpeed * (1.0/3.0) else baseSpeed
     
     newPos = psPosition ps + (forwardVec *^ (throttle * effectiveSpeed * dt))
     
@@ -114,11 +115,10 @@ updatePlayerMovement dt gmap ps moveVec =
                  
   in ps { psPosition = finalPos, psBodyAngle = newBodyAngle }
 
--- << SỬA CHỮ KÝ HÀM
 updateBulletPhysics :: Float -> RoomGameState -> RoomGameState
 updateBulletPhysics dt gs =
   let
-    updatedBullets = map (moveBullet dt) (rgsBullets gs) -- << SỬA
+    updatedBullets = map (moveBullet dt) (rgsBullets gs)
   in
     gs { rgsBullets = updatedBullets }
 
@@ -128,12 +128,11 @@ moveBullet dt b = b
   , bsLifetime = bsLifetime b - dt
   }
 
--- << SỬA CHỮ KÝ HÀM
 filterDeadEntities :: RoomGameState -> RoomGameState
 filterDeadEntities gs =
   let
-    gameMap = rgsMap gs -- << SỬA
-    aliveBullets = filter (\b -> bsLifetime b > 0 && not (isPositionSolid gameMap (bsPosition b))) (rgsBullets gs) -- << SỬA
-    aliveEnemies = filter ((> 0) . esHealth) (rgsEnemies gs) -- << SỬA
+    gameMap = rgsMap gs
+    aliveBullets = filter (\b -> bsLifetime b > 0 && not (isPositionSolid gameMap (bsPosition b))) (rgsBullets gs)
+    aliveEnemies = filter ((> 0) . esHealth) (rgsEnemies gs)
   in
     gs { rgsBullets = aliveBullets, rgsEnemies = aliveEnemies }

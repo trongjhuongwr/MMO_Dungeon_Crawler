@@ -29,6 +29,7 @@ data RoomGameState = RoomGameState
   , rgsMatchState :: MatchState
   , rgsMode     :: GameMode
   , rgsIsPaused :: Bool
+  , rgsCurrentTime :: Float
   }
 
 data Command = Command SockAddr PlayerCommand
@@ -46,6 +47,7 @@ initialRoomGameState loadedMap spawnPoints mode = RoomGameState
   , rgsMatchState = Waiting
   , rgsMode = mode
   , rgsIsPaused = False
+  , rgsCurrentTime = 0.0
   }
 
 initialPlayerState :: Vec2 -> Int -> TankType -> PlayerState
@@ -58,6 +60,7 @@ initialPlayerState spawnPos playerId tankType = PlayerState
   , psHealth = 100
   , psTankType = tankType
   , psLives = 3
+  , psLastFireTime = 0.0
   }
 
 -- ================================================================
