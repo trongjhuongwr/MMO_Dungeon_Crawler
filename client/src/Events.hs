@@ -50,18 +50,52 @@ handleInputIO event mvar = do
 handleInputLogin :: Event -> ClientState -> IO ClientState
 handleInputLogin event cState@(ClientState { csTcpHandle = h, csState = (S_Login ld) }) =
   case event of
+    -- Xử lý gõ phím
     (EventKey (Char c) Down _ _) -> 
-      pure cState { csState = S_Login ld { ldUsername = ldUsername ld ++ [c] } }
-    (EventKey (SpecialKey KeyBackspace) Down _ _) -> 
-      pure cState { csState = S_Login ld { ldUsername = if null (ldUsername ld) then "" else init (ldUsername ld) } }
-    (EventKey (MouseButton LeftButton) Down _ (x, y)) ->
-      if (x > -120 && x < 80 && y > -175 && y < -125) 
-      then do
-        sendTcpPacket h (CTP_Login (ldUsername ld) "")
-        pure cState { csState = S_Login ld { ldStatus = "Logging in..." } }
-      else pure cState
+      pure $ cState { csState = S_Login updateField }
+      where 
+        updateField = case ldActiveField ld of
+                        UserField -> ld { ldUsername = ldUsername ld ++ [c] }
+                        PassField -> ld { ldPassword = ldPassword ld ++ [c] }
+
+    -- Xử lý Backspace
+    (EventKey (SpecialKey KeyBackspace) Down _ _) ->
+      pure $ cState { csState = S_Login (updateField) }
+      where 
+        updateField = case ldActiveField ld of
+          UserField -> ld { ldUsername = if null (ldUsername ld) then "" else init (ldUsername ld) }
+          PassField -> ld { ldPassword = if null (ldPassword ld) then "" else init (ldPassword ld) }
+
+    -- Xử lý phím Tab
+    (EventKey (SpecialKey KeyTab) Down _ _) ->
+      pure $ cState { csState = S_Login (toggleField) }
+      where
+        toggleField = case ldActiveField ld of
+                        UserField -> ld { ldActiveField = PassField }
+                        PassField -> ld { ldActiveField = UserField }
+
+    -- Xử lý Click chuột
+    (EventKey (MouseButton LeftButton) Down _ (x, y))
+      -- Click vào ô Username
+      | (x > -20 && x < 180 && y > 25 && y < 75) ->
+          pure cState { csState = S_Login (ld { ldActiveField = UserField }) }
+      -- Click vào ô Password
+      | (x > -20 && x < 180 && y > -55 && y < -5) ->
+          pure cState { csState = S_Login (ld { ldActiveField = PassField }) }
+
+      -- Click nút Login (x = -100)
+      | (x > -200 && x < 0 && y > -175 && y < -125) -> do
+          sendTcpPacket h (CTP_Login (ldUsername ld) (ldPassword ld))
+          pure cState { csState = S_Login ld { ldStatus = "Logging in..." } }
+
+      -- Click nút Register (x = 100)
+      | (x > 0 && x < 200 && y > -175 && y < -125) -> do
+          sendTcpPacket h (CTP_Register (ldUsername ld) (ldPassword ld))
+          pure cState { csState = S_Login ld { ldStatus = "Registering..." } }
+
+      | otherwise -> pure cState
     _ -> pure cState
-handleInputLogin _ cState = pure cState 
+handleInputLogin _ cState = pure cState
 
 -- === MAIN MENU ===
 handleInputMenu :: Event -> ClientState -> IO ClientState

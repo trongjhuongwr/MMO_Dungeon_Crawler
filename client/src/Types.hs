@@ -4,6 +4,7 @@
 module Types
   ( InGameState(..)
   , LoginData(..)
+  , ActiveField(..)
   , LobbyData(..)
   , PostGameData(..)
   , AppState(..)
@@ -48,8 +49,15 @@ data InGameState = InGameState
   , igsMode              :: GameMode
   }
 
+data ActiveField = UserField | PassField deriving (Eq, Show)
+
 -- Dữ liệu cho màn hình Login
-data LoginData = LoginData { ldUsername :: String, ldStatus :: String }
+data LoginData = LoginData 
+  { ldUsername :: String
+  , ldPassword :: String
+  , ldStatus :: String
+  , ldActiveField :: ActiveField
+  }
 
 -- Dữ liệu cho sảnh chờ
 data LobbyData = LobbyData 

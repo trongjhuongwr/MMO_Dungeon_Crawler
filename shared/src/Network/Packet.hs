@@ -31,7 +31,8 @@ import Types.GameMode (GameMode)
 
 -- Gói tin TCP (Dùng cho Login, Lobby, Quản lý phòng)
 data ClientTcpPacket
-  = CTP_Login String String -- (username, password) - Tạm thời chỉ dùng username
+  = CTP_Login String String -- (username, password)
+  | CTP_Register String String -- (username, password)
   | CTP_CreateRoom
   | CTP_JoinRoom String     -- (roomId)
   | CTP_UpdateLobbyState (Maybe TankType) Bool -- (Maybe TankType, IsReady)

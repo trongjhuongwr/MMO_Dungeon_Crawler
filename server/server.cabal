@@ -45,6 +45,7 @@ library
     , aeson
     , array
     , base >=4.7 && <5
+    , bcrypt
     , binary
     , bytestring
     , containers
@@ -52,6 +53,8 @@ library
     , network
     , random
     , shared
+    , sqlite-simple
+    , text
     , yaml
   default-language: Haskell2010
 
@@ -69,6 +72,7 @@ executable mmo-server
     , aeson
     , array
     , base >=4.7 && <5
+    , bcrypt
     , binary
     , bytestring
     , containers
@@ -77,5 +81,7 @@ executable mmo-server
     , random
     , server
     , shared
+    , sqlite-simple
+    , text
     , yaml
   default-language: Haskell2010

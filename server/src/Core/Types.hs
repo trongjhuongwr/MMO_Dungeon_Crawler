@@ -16,6 +16,7 @@ import Network.Packet (PlayerInfo)
 import System.IO (Handle)
 import Control.Concurrent.MVar (MVar)
 import Types.GameMode (GameMode(..))
+import Database.SQLite.Simple (Connection)
 
 data RoomGameState = RoomGameState
   { rgsTick     :: Int
@@ -86,15 +87,17 @@ data ServerState = ServerState
   , ssNextPlayerId :: Int
   , ssUdpSocket :: Socket 
   , ssMap       :: GameMap 
-  , ssSpawns    :: [Vec2]    
+  , ssSpawns    :: [Vec2]
+  , ssDbConn    :: Connection
   }
 
-initialServerState :: Socket -> GameMap -> [Vec2] -> ServerState
-initialServerState sock gmap spawns = ServerState
+initialServerState :: Socket -> GameMap -> [Vec2] -> Connection -> ServerState
+initialServerState sock gmap spawns dbConn = ServerState
   { ssClients = Map.empty
   , ssRooms = Map.empty
   , ssNextPlayerId = 1
   , ssUdpSocket = sock
   , ssMap = gmap
   , ssSpawns = spawns
+  , ssDbConn = dbConn
   }

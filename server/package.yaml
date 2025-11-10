@@ -23,6 +23,9 @@ dependencies:
   - filepath
   - yaml
   - random
+  - text
+  - sqlite-simple
+  - bcrypt
 
 # Phần thư viện của server (chứa logic game)
 library:
