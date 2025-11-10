@@ -59,8 +59,8 @@ respawnDeadPlayers gs =
 
 
 -- VÒNG LẶP GAME CỦA MỘT PHÒNG
-gameLoop :: MVar ServerState -> String -> MVar RoomGameState -> IO ()
-gameLoop serverStateRef roomId roomStateRef = (forever $ do
+gameLoop :: Socket -> String -> MVar RoomGameState -> IO ()
+gameLoop sock roomId roomStateRef = (forever $ do
   gs <- takeMVar roomStateRef
   
   -- 1. KIỂM TRA PAUSE
@@ -128,29 +128,26 @@ gameLoop serverStateRef roomId roomStateRef = (forever $ do
           pure (gs, [(packet, Map.keys (rgsPlayers gs))])
       
       -- 3. GỬI PACKETS (BÊN NGOÀI 'case')
-      sState <- readMVar serverStateRef
-      sendPackets sState packetsToSend
+      sendPackets sock packetsToSend
       
       -- 4. CẬP NHẬT STATE VÀ NGỦ
       let cleanGameState = finalGameState { rgsCommands = [] }
       putMVar roomStateRef cleanGameState
       
       -- 5. KIỂM TRA THOÁT LOOP
-      when (isMatchOver cleanGameState) (breakLoop serverStateRef roomId)
+      when (isMatchOver cleanGameState) (breakLoop roomId)
       
       threadDelay tickInterval -- <-- HÀNH ĐỘNG CUỐI CÙNG CỦA 'else'
 
   ) `catch` \(e :: SomeException) -> do
-    -- Bắt lỗi "fail" từ breakLoop để thoát
     putStrLn $ "[GameLoop " ++ roomId ++ "] Loop exited."
     pure ()
 
   -- === HÀM HELPER (ĐỊNH NGHĨA TRONG 'where') ===
   where
     -- Gửi gói tin
-    sendPackets :: ServerState -> [(ServerUdpPacket, [SockAddr])] -> IO ()
-    sendPackets sState packetsToSend = do
-      let sock = ssUdpSocket sState
+    sendPackets :: Socket -> [(ServerUdpPacket, [SockAddr])] -> IO ()
+    sendPackets sock packetsToSend = do
       mapM_ (\(pkt, targetAddrs) -> do
         let lazyPkt = encode pkt
         let strictPkt = toStrict lazyPkt
@@ -172,11 +169,13 @@ gameLoop serverStateRef roomId roomStateRef = (forever $ do
       _          -> False
 
     -- Dừng vòng lặp
-    breakLoop :: MVar ServerState -> String -> IO ()
-    breakLoop serverStateRef roomId = do
-      putStrLn $ "[GameLoop " ++ roomId ++ "] Match finished. Stopping game loop."
-      -- Xóa phòng khỏi ServerState
-      modifyMVar_ serverStateRef $ \sState ->
-        pure sState { ssRooms = Map.delete roomId (ssRooms sState) }
-      -- Thoát khỏi `forever`
+    breakLoop :: String -> IO ()
+    breakLoop roomId = do
+      putStrLn $ "[GameLoop " ++ roomId ++ "] Match finished. Stopping game loop thread."
+      
+      -- XÓA DÒNG NÀY ĐỂ TRÁNH DEADLOCK
+      -- modifyMVar_ serverStateRef $ \sState ->
+      --  pure sState { ssRooms = Map.delete roomId (ssRooms sState) }
+      
+      -- Chỉ cần thoát vòng lặp
       fail "Game loop finished."

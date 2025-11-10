@@ -105,6 +105,7 @@ renderLobby roomId players myId myTank myReady = Pictures
   -- Nút Sẵn sàng
   , let (c3, t3) = if myReady then (green, "NOT READY") else (red, "READY")
     in Color c3 $ drawButton (0, -200) t3
+  , drawButton (0, -260) "BACK"
   ]
   where
     getPlayer :: Int -> [PlayerInfo] -> Maybe PlayerInfo

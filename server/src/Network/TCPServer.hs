@@ -312,7 +312,9 @@ processPacket dbConn mPid h pkt sState serverStateRef =
                   let finalRoom = updatedRoom { roomGame = Just roomGameMVar }
                   let finalRooms = Map.insert roomId finalRoom (ssRooms sState)
                   
-                  let gameLoopAction = forkIO $ gameLoop serverStateRef roomId roomGameMVar
+                  let udpSock = ssUdpSocket sState
+
+                  let gameLoopAction = forkIO $ gameLoop udpSock roomId roomGameMVar
                   let broadcastActions = broadcastToRoom finalRoom (STP_GameStarting PvP)
                   let allActions = void gameLoopAction : broadcastActions
                   

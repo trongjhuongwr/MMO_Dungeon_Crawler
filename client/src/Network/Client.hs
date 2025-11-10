@@ -164,7 +164,7 @@ tcpListenLoop h mvar = loop LBS.empty
                   -- Nếu bị "kick" khi đang ở màn hình chọn phòng,
                   -- có nghĩa là Join thất bại. Hiển thị lỗi.
                   S_RoomSelection rsd -> 
-                    pure cState { csState = S_RoomSelection (rsd { rsdError = msg }) }
+                    pure cState { csState = S_RoomSelection (rsd { rsdError = msg, rsdRoomId = "" }) }
 
                   _ -> 
                     pure cState { csState = S_Menu }
