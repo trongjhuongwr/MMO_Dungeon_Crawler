@@ -59,7 +59,7 @@ main = withSocketsDo $ do
                 , csUdpSocket = sockUDP
                 , csServerAddr = serverAddrUDP
                 , csMyId = 0 
-                , csState = S_Login (LoginData "Player" "Please login")
+                , csState = S_Login (LoginData "" "" "Please login" UserField)
                 , csResources = assets
                 }
           
@@ -85,7 +85,7 @@ renderIO :: MVar ClientState -> IO Picture
 renderIO mvar = do
   cState <- readMVar mvar
   case (csState cState) of
-    S_Login (LoginData user status) -> pure $ renderLogin user status
+    S_Login loginData -> pure $ renderLogin loginData
     S_Menu -> pure renderMenu
     S_RoomSelection roomId -> pure $ renderRoomSelection roomId
     S_Lobby (LobbyData rId pInfo myTank myReady) -> pure $ renderLobby rId pInfo (csMyId cState) myTank myReady

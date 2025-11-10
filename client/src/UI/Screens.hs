@@ -16,7 +16,7 @@ import Types.Tank (TankType(..))
 import Data.Maybe (isJust, fromJust)
 import Data.List (find)
 import qualified Data.Set as Set
-import Types (PostGameData(..))
+import Types (PostGameData(..), LoginData(..), ActiveField(..))
 
 -- === HÀM TIỆN ÍCH VẼ ===
 
@@ -34,15 +34,31 @@ drawText (x, y) size text = Translate x y $ Scale size size $ Color white $ Text
 
 -- === CÁC MÀN HÌNH ===
 
-renderLogin :: String -> String -> Picture
-renderLogin username status = Pictures
+renderLogin :: LoginData -> Picture
+renderLogin (LoginData username password status activeField) = Pictures
   [ Color black $ rectangleSolid 800 600   -- Background
   , drawText (-80, 150) 0.3 "LOGIN"
+
+  -- Username
   , drawText (-200, 40) 0.2 "Username:"
-  , drawButton (80, 50) username           -- Ô nhập liệu
+  , drawButton (80, 50) username
+  , if activeField == UserField -- Hiển thị viền active
+      then Translate 80 50 $ Color yellow $ rectangleWire 200 50
+      else Blank
+
+  -- Password
   , drawText (-200, -40) 0.2 "Password:"
-  , drawButton (80, -30) "********"        -- Ô nhập liệu mật khẩu
-  , drawButton (-20, -150) "  Submit"
+  , drawButton (80, -30) (map (const '*') password) -- Hiển thị '*'
+  , if activeField == PassField -- Hiển thị viền active
+      then Translate 80 (-30) $ Color yellow $ rectangleWire 200 50
+      else Blank
+
+  -- Nút Login (trước là "Submit")
+  , drawButton (-100, -150) "   Login"
+
+  -- Nút Register MỚI
+  , drawButton (100, -150) " Register"
+
   , drawText (-80, -200) 0.1 status
   ]
 

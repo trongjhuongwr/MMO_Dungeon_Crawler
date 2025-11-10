@@ -111,7 +111,7 @@ tcpListenLoop h mvar = loop LBS.empty
               STP_LoginResult success pid msg ->
                 if success
                 then pure cState { csMyId = pid, csState = S_Menu }
-                else pure cState { csState = S_Login (LoginData "" msg) }
+                else pure cState { csState = S_Login (LoginData "" "" msg UserField) }
                 
               STP_RoomUpdate roomId pInfos ->
                 let myInfo = find (\p -> piId p == csMyId cState) pInfos
@@ -160,7 +160,7 @@ tcpListenLoop h mvar = loop LBS.empty
                     pure cState { csState = S_InGame newInGameState }
                 
               STP_Kicked msg ->
-                pure cState { csState = S_Login (LoginData "" msg) }
+                pure cState { csState = S_Login (LoginData "" "" msg UserField) }
               
               STP_ShowMenu ->
                 pure cState { csState = S_Menu }
