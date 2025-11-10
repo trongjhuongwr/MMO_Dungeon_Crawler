@@ -239,7 +239,7 @@ processPacket dbConn mPid h pkt sState serverStateRef =
 
     -- ================================================================
     -- TRẠNG THÁI: ĐÃ ĐĂNG NHẬP (mPid is Just pid)
-    -- ================================================================
+    -- ==================================================================
 
     (CTP_CreateRoom, Just pid) -> do
       newRoomId <- generateRoomId
