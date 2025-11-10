@@ -145,8 +145,8 @@ renderDungeonLobby myTank = Pictures
     in Color c2 $ drawButton (100, 0) t2
 
   -- Mô tả Tank
-  , drawText (-150, -80) 0.1 "Rapid: Fast, low damage, 2-shot burst."
-  , drawText (-150, -100) 0.1 "Blast: Slow, high damage, AOE explosion."
+  , drawText (-150, -80) 0.1 "Rapid: Speed = 100, Damage = 4, Cooldown = 0.2s"
+  , drawText (-150, -100) 0.1 "Blast: Speed = 70, Damage = 25, Cooldown = 1s"
 
   -- Nút Bắt đầu (bị vô hiệu hóa nếu chưa chọn tank)
   , case myTank of
