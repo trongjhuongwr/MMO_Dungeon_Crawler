@@ -80,8 +80,6 @@ sendUdpPacket sock addr pkt = do
 tcpListenLoop :: Handle -> MVar ClientState -> IO ()
 tcpListenLoop h mvar = loop LBS.empty
   where
-    -- === FIX LỖI TCP STREAM (1/2) ===
-    
     -- Vòng lặp 'loop' chỉ ĐỌC từ socket và GỌI 'processBuffer'
     loop :: LBS.ByteString -> IO ()
     loop buffer = do
@@ -108,8 +106,7 @@ tcpListenLoop h mvar = loop LBS.empty
       case decodeResult of
         -- 1. Decode thất bại (chưa đủ dữ liệu)
         Left (_, _, _) -> do
-          -- FIX: Không đủ data, quay lại 'loop' với buffer hiện tại
-          -- để chờ đọc thêm
+          -- Không đủ data, quay lại 'loop' với buffer hiện tại để chờ đọc thêm
           loop buffer
             
         -- 2. Decode thành công
@@ -171,8 +168,7 @@ tcpListenLoop h mvar = loop LBS.empty
                 
               STP_Kicked msg ->
                 case (csState cState) of
-                  -- Nếu bị "kick" khi đang ở màn hình chọn phòng,
-                  -- có nghĩa là Join thất bại. Hiển thị lỗi.
+                  -- Nếu bị "kick" khi đang ở màn hình chọn phòng, có nghĩa là Join thất bại. Hiển thị lỗi.
                   S_RoomSelection rsd -> 
                     pure cState { csState = S_RoomSelection (rsd { rsdError = msg, rsdRoomId = "" }) }
 
@@ -189,14 +185,12 @@ tcpListenLoop h mvar = loop LBS.empty
                     in pure cState { csState = S_PostGame (pgData { pgRematchRequesters = newSet }) }
                   _ -> pure cState -- Bỏ qua nếu không ở màn hình PostGame
           
-          -- FIX: Xử lý phần buffer còn lại
+          -- Xử lý phần buffer còn lại
           if LBS.null remaining
             then loop remaining -- Hết buffer, quay lại chờ đọc
             else do
               putStrLn $ "[TCP] Processing " ++ show (LBS.length remaining) ++ " remaining bytes in buffer."
               processBuffer remaining -- Đệ quy 'processBuffer'
-    
-    -- === KẾT THÚC FIX ===
 
 -- Lắng nghe gói UDP từ Server (Trong Game)
 udpListenLoop :: Socket -> MVar ClientState -> IO ()

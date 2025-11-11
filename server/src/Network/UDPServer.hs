@@ -37,18 +37,13 @@ udpListenLoop sock serverStateRef = forever $ do
         putStrLn $ "[UDP] Failed to decode ClientUdpPacket from " ++ show addr ++ ": " ++ errMsg
         pure ()
       Right (_, _, clientPkt) -> do
-        
-        -- === FIX DEADLOCK (3/3) ===
         -- Tách logic đọc S-lock và ghi R-lock
-        
         case clientPkt of
-          
           -- GÓI HANDSHAKE: Cần cập nhật CẢ S-lock và R-lock
           CUP_Handshake pid -> do
             putStrLn $ "[UDP] Handshake from " ++ show pid ++ " at " ++ show addr
             
-            -- B1: Khóa S-lock (serverStateRef) để cập nhật pcUdpAddr
-            --     VÀ lấy ra mGameMVar cùng hành động R-lock (nếu có)
+            -- B1: Khóa S-lock (serverStateRef) để cập nhật pcUdpAddr VÀ lấy ra mGameMVar cùng hành động R-lock (nếu có)
             mGameAction <- modifyMVar serverStateRef $ \sState -> do
               let (mRoom, mRoomId) = findRoomByPlayerId pid sState
               case (mRoom, mRoomId) of

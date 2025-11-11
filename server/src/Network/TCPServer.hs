@@ -391,7 +391,6 @@ processPacket dbConn mPid h pkt sState serverStateRef =
         _ -> pure (sState, (Just pid, [])) -- Không tìm thấy phòng
 
     (CTP_PauseGame isPaused, Just pid) -> do
-      -- === FIX DEADLOCK (2/3) ===
       -- B1: Chỉ lấy mRoomGame (con trỏ MVar) bên trong S-lock
       let (mRoom, mRoomId) = findRoomByPlayerId pid sState
       let mGameMVar = mRoom >>= roomGame
@@ -447,8 +446,6 @@ processPacket dbConn mPid h pkt sState serverStateRef =
 
     (CTP_RequestRematch, Just pid) -> do
       let (mRoom, mRoomId) = findRoomByPlayerId pid sState
-      
-      -- === FIX DEADLOCK (2/3) ===
       -- B1: Lấy MVar
       let mGameMVar = mRoom >>= roomGame
 
