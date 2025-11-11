@@ -80,6 +80,9 @@ sendUdpPacket sock addr pkt = do
 tcpListenLoop :: Handle -> MVar ClientState -> IO ()
 tcpListenLoop h mvar = loop LBS.empty
   where
+    -- === FIX LỖI TCP STREAM (1/2) ===
+    
+    -- Vòng lặp 'loop' chỉ ĐỌC từ socket và GỌI 'processBuffer'
     loop :: LBS.ByteString -> IO ()
     loop buffer = do
       strictChunk <- do
@@ -94,18 +97,25 @@ tcpListenLoop h mvar = loop LBS.empty
       then putStrLn "[TCP] Server disconnected." >> fail "Server disconnected"
       else do
         let fullBuffer = buffer <> fromStrict strictChunk
-        processBuffer fullBuffer
+        processBuffer fullBuffer -- Luôn gọi processBuffer với buffer MỚI
 
+    -- 'processBuffer' xử lý buffer (có thể đệ quy)
     processBuffer :: LBS.ByteString -> IO ()
     processBuffer buffer = do
+      -- Thử decode
       let decodeResult = decodeOrFail buffer :: Either (LBS.ByteString, Int64, String) (LBS.ByteString, Int64, ServerTcpPacket)
       
       case decodeResult of
-        Left (_, _, errMsg) -> do
+        -- 1. Decode thất bại (chưa đủ dữ liệu)
+        Left (_, _, _) -> do
+          -- FIX: Không đủ data, quay lại 'loop' với buffer hiện tại
+          -- để chờ đọc thêm
           loop buffer
             
+        -- 2. Decode thành công
         Right (remaining, _, pkt) -> do
           putStrLn $ "[TCP] Received: " ++ show pkt
+          -- Xử lý packet (logic không đổi)
           modifyMVar_ mvar $ \cState -> do
             case pkt of
               STP_LoginResult success pid msg ->
@@ -179,11 +189,14 @@ tcpListenLoop h mvar = loop LBS.empty
                     in pure cState { csState = S_PostGame (pgData { pgRematchRequesters = newSet }) }
                   _ -> pure cState -- Bỏ qua nếu không ở màn hình PostGame
           
+          -- FIX: Xử lý phần buffer còn lại
           if LBS.null remaining
-            then loop remaining 
+            then loop remaining -- Hết buffer, quay lại chờ đọc
             else do
               putStrLn $ "[TCP] Processing " ++ show (LBS.length remaining) ++ " remaining bytes in buffer."
-              processBuffer remaining
+              processBuffer remaining -- Đệ quy 'processBuffer'
+    
+    -- === KẾT THÚC FIX ===
 
 -- Lắng nghe gói UDP từ Server (Trong Game)
 udpListenLoop :: Socket -> MVar ClientState -> IO ()
