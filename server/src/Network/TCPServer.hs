@@ -307,6 +307,7 @@ processPacket dbConn mPid h pkt sState serverStateRef =
       let udpSock = ssUdpSocket sState
 
       -- 4. Tạo actions
+      -- Hành động forkIO là an toàn, nó không khóa R-lock ngay lập tức
       let gameLoopAction = forkIO $ gameLoop udpSock newRoomId roomGameMVar serverStateRef
       let clientAction = sendTcpPacket h (STP_GameStarting PvE)
       let allActions = [void gameLoopAction, clientAction]
@@ -372,6 +373,7 @@ processPacket dbConn mPid h pkt sState serverStateRef =
                   
                   let udpSock = ssUdpSocket sState
 
+                  -- Hành động forkIO là an toàn (không khóa R-lock ngay)
                   let gameLoopAction = forkIO $ gameLoop udpSock roomId roomGameMVar serverStateRef
                   let broadcastActions = broadcastToRoom finalRoom (STP_GameStarting PvP)
                   let allActions = void gameLoopAction : broadcastActions
@@ -389,32 +391,42 @@ processPacket dbConn mPid h pkt sState serverStateRef =
         _ -> pure (sState, (Just pid, [])) -- Không tìm thấy phòng
 
     (CTP_PauseGame isPaused, Just pid) -> do
+      -- B1: Chỉ lấy mRoomGame (con trỏ MVar) bên trong S-lock
       let (mRoom, mRoomId) = findRoomByPlayerId pid sState
-      case (mRoom, mRoomId) of
-        (Just room, Just roomId) ->
-          case roomGame room of
-            Just gameMVar -> do
-              let action = modifyMVar_ gameMVar $ \rgs -> do
-                    if (rgsMode rgs == PvE) -- Vẫn giữ logic chỉ cho PvE (mặc dù PvE đang bị tắt)
+      let mGameMVar = mRoom >>= roomGame
+
+      -- B2: Tạo action (sẽ chạy bên ngoài S-lock)
+      let actions = case (mRoomId, mGameMVar) of
+            (Just roomId, Just gameMVar) ->
+              let pauseAction = modifyMVar_ gameMVar $ \rgs -> do
+                    if (rgsMode rgs == PvE)
                       then do
                         putStrLn $ "[GameLoop " ++ roomId ++ "] Setting Paused: " ++ show isPaused
                         pure $ rgs { rgsIsPaused = isPaused }
                       else 
                         pure rgs -- Không cho phép pause PvP
-              pure (sState, (Just pid, [action]))
-            _ -> pure (sState, (Just pid, [])) -- Game không chạy
-        _ -> pure (sState, (Just pid, [])) -- Không tìm thấy phòng
+              in [pauseAction]
+            _ -> [] -- Không tìm thấy phòng hoặc game
+      
+      -- B3: Trả về state và action
+      pure (sState, (Just pid, actions))
 
     (CTP_LeaveRoom, Just pid) -> do
       let (mRoom, mRoomId) = findRoomByPlayerId pid sState
       let actionToClient = sendTcpPacket h STP_ShowMenu -- Gửi client về menu
+      
+      -- === FIX DEADLOCK (2/3) ===
+      -- B1: Lấy MVar
+      let mGameMVar = mRoom >>= roomGame
+      
+      -- B2: Tạo action
+      let unpauseAction = case mGameMVar of
+            Just gameMVar -> [modifyMVar_ gameMVar (\rgs -> pure rgs { rgsIsPaused = False })]
+            Nothing -> []
+
+      -- B3: Cập nhật S-lock (state của server)
       case (mRoom, mRoomId) of
         (Just room, Just roomId) -> do
-          -- TỰ ĐỘNG UNPAUSE KHI RỜI PHÒNG
-          let unpauseAction = case roomGame room of
-                Just gameMVar -> [modifyMVar_ gameMVar (\rgs -> pure rgs { rgsIsPaused = False })]
-                Nothing -> []
-
           let newPlayers = Map.delete pid (roomPlayers room)
           let updatedRoom = room { roomPlayers = newPlayers, roomRematchRequests = Set.empty }
 
@@ -434,7 +446,10 @@ processPacket dbConn mPid h pkt sState serverStateRef =
 
     (CTP_RequestRematch, Just pid) -> do
       let (mRoom, mRoomId) = findRoomByPlayerId pid sState
-      case (mRoom, mRoomId, mRoom >>= roomGame) of
+      -- B1: Lấy MVar
+      let mGameMVar = mRoom >>= roomGame
+
+      case (mRoom, mRoomId, mGameMVar) of
         (Just room, Just roomId, Just gameMVar) -> do
           let newRequests = Set.insert pid (roomRematchRequests room)
           let updatedRoom = room { roomRematchRequests = newRequests }
@@ -446,6 +461,7 @@ processPacket dbConn mPid h pkt sState serverStateRef =
             then do
               putStrLn $ "[TCP] Room " ++ roomId ++ " is starting a rematch!"
               
+              -- B2: Tạo action
               let resetGameAction = modifyMVar_ gameMVar $ \rgs -> do
                     let getSpawnPos pId spawns = if null spawns
                                                   then Vec2 100 100
@@ -460,9 +476,9 @@ processPacket dbConn mPid h pkt sState serverStateRef =
                           }
                     pure newGameState
 
+              -- B3: Cập nhật S-lock
               let finalRoom = updatedRoom { roomRematchRequests = Set.empty }
               let finalRooms = Map.insert roomId finalRoom (ssRooms sState)
-              
               let broadcastActions = broadcastToRoom finalRoom (STP_GameStarting PvP)
               
               pure (sState { ssRooms = finalRooms }, (Just pid, resetGameAction : broadcastActions))

@@ -63,6 +63,13 @@ respawnDeadPlayers gs =
 -- VÒNG LẶP GAME CỦA MỘT PHÒNG
 gameLoop :: Socket -> String -> MVar RoomGameState -> MVar ServerState -> IO ()
 gameLoop sock roomId roomStateRef serverStateRef = (forever $ do
+  -- KIỂM TRA TRẠNG THÁI SERVER (KHÔNG GIỮ KHÓA ROOM)
+  sState <- readMVar serverStateRef
+  when (Map.notMember roomId (ssRooms sState)) $ do
+    putStrLn $ "[GameLoop " ++ roomId ++ "] Room deleted. Stopping thread."
+    fail "Room cleanup." -- Thoát thread an toàn
+
+  -- BẮT ĐẦU KHÓA ROOM VÀ XỬ LÝ TICK
   gs <- takeMVar roomStateRef
   
   -- 1. KIỂM TRA PAUSE
@@ -138,12 +145,6 @@ gameLoop sock roomId roomStateRef serverStateRef = (forever $ do
       -- 4. CẬP NHẬT STATE VÀ NGỦ
       let cleanGameState = finalGameState { rgsCommands = [] }
       putMVar roomStateRef cleanGameState
-      
-      -- 5. KIỂM TRA XEM ROOM CÒN TỒN TẠI KHÔNG (THÊM KHỐI NÀY)
-      sState <- readMVar serverStateRef
-      when (Map.notMember roomId (ssRooms sState)) $ do
-        putStrLn $ "[GameLoop " ++ roomId ++ "] Room deleted by TCPServer. Stopping thread."
-        fail "Room cleanup." -- 'fail' ở đây an toàn, để thoát thread
 
       threadDelay tickInterval -- <-- HÀNH ĐỘNG CUỐI CÙNG CỦA 'else'
 
