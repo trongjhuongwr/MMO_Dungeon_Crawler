@@ -133,7 +133,7 @@ renderLobby roomId players myId myTank myReady = Pictures
         ]
 
 renderPostGame :: PostGameData -> Int -> Picture
-renderPostGame (PostGameData status requesters) myId = Pictures
+renderPostGame (PostGameData status requesters _myLastTank) myId = Pictures
   [ Color black $ rectangleSolid 800 600 -- Background
   , drawText (-100, 100) 0.5 status
   
