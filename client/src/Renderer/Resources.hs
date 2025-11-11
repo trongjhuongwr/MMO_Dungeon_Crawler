@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Use uncurry" #-}
+{-# HLINT ignore "Redundant as" #-}
 module Renderer.Resources
   ( loadResources
   , Resources(..)
@@ -52,6 +53,7 @@ data Resources = Resources
   , resExplosionFrames   :: [Picture]
   , resVignetteMask      :: Picture
   , resLifeIcons         :: [Picture]
+  , resRadar             :: Picture
   }
 
 tileTypeToPath :: TileType -> Maybe FilePath
@@ -113,6 +115,7 @@ loadResources = do
   -- Load Common FX
   eExplosionImg <- readImage (Settings.projectile "explosion_spritesheet_blast.png")
   mVignette <- loadJuicyPNG (Settings.ui "vignette_mask_01.png")
+  mRadar    <- loadJuicyPNG (Settings.ui "radar.png")
 
   -- Tải 4 khung hình 'lives'
   let lifeIconPath = Settings.ui "life_icons.png"
@@ -142,14 +145,14 @@ loadResources = do
   
   case ( mTankBodyRapid,  eTurretImgRapid,  mBulletNormal
        , mTankBodyBlast,  eTurretImgBlast,  mBulletBlast
-       , eExplosionImg, mVignette
+       , eExplosionImg, mVignette, mRadar
        , mLifeFrames'
        ) of
     ( Just bodyRapid,  Right dynTurretRapid,  Just bulletNormal
       , Just bodyBlast,  Right dynTurretBlast,  Just bulletBlast
-      , Right dynExplosionImg, Just vignette
+      , Right dynExplosionImg, Just vignette, Just radar 
       , lifeFrames
-      ) -> 
+      ) ->
       let
         turretFramesRapid = loadSpriteSheet dynTurretRapid 128 128 8 
         turretFramesBlast = loadSpriteSheet dynTurretBlast 128 128 8
@@ -166,5 +169,6 @@ loadResources = do
           , resExplosionFrames = explosionFrames
           , resVignetteMask = vignette
           , resLifeIcons = lifeFrames
+          , resRadar = radar
           }
     _ -> return $ Left "Failed to load critical assets (tanks, bullets, explosion, vignette, or life icons)"

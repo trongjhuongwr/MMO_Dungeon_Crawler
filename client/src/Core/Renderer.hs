@@ -15,7 +15,7 @@ import Core.Effect (Effect(..))
 import Core.Animation (Animation, getCurrentFrame) 
 import qualified Data.Map as Map 
 import qualified Data.Array as Array 
-import UI.HUD (renderHUD) 
+import UI.HUD (renderHUD, renderRadar) 
 import Data.Maybe (maybe, Maybe(..)) 
 import qualified Data.List as List 
 import Data.Ord (comparing) 
@@ -82,7 +82,14 @@ render assets gameMap snapshot effects animRapid animBlast mMyId matchState =
                      Nothing -> []
     
     otherPlayerPics = map (drawOtherPlayer assets) otherPlayers
-        
+
+    -- === THÊM KHỐI NÀY ===
+    radarPic =
+      case (ourPlayer, matchState) of
+        (Just p, InProgress) -> renderRadar assets p otherPlayers
+        _                    -> Blank
+    -- === KẾT THÚC THÊM MỚI ===
+
     (camX, camY) = case ourPlayer of
                      Just p  -> (vecX $ psPosition p, vecY $ psPosition p)
                      Nothing -> (0, 0)
@@ -131,6 +138,7 @@ render assets gameMap snapshot effects animRapid animBlast mMyId matchState =
         Pictures
           [ Translate (-camX) (-camY) worldLayer
           , hudPic
+          , radarPic
           , uiOverlay
           ]
   
