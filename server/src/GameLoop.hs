@@ -65,9 +65,24 @@ gameLoop :: Socket -> String -> MVar RoomGameState -> MVar ServerState -> IO ()
 gameLoop sock roomId roomStateRef serverStateRef = (forever $ do
   -- KIỂM TRA TRẠNG THÁI SERVER (KHÔNG GIỮ KHÓA ROOM)
   sState <- readMVar serverStateRef
-  when (Map.notMember roomId (ssRooms sState)) $ do
-    putStrLn $ "[GameLoop " ++ roomId ++ "] Room deleted. Stopping thread."
-    fail "Room cleanup." -- Thoát thread an toàn
+  case Map.lookup roomId (ssRooms sState) of
+    Nothing -> do
+      -- 1. Phòng đã bị xóa (logic cũ)
+      putStrLn $ "[GameLoop " ++ roomId ++ "] Room deleted. Stopping thread."
+      fail "Room cleanup." -- Thoát thread an toàn
+    
+    Just currentRoom ->
+      case roomGame currentRoom of
+        Nothing -> do
+          -- 2. Phòng vẫn còn, nhưng đã reset về lobby (roomGame = Nothing)
+          putStrLn $ "[GameLoop " ++ roomId ++ "] Room reverted to lobby. Stopping thread."
+          fail "Room reverted to lobby." -- Thoát thread an toàn
+        
+        Just _ -> do
+          -- 3. Phòng vẫn còn VÀ MVar vẫn còn.
+          --    Chúng ta tiếp tục (Giả định MVar này là của trận đấu hiện tại
+          --    hoặc một trận rematch mới. Lỗi "orphan" là khi nó bị set về Nothing)
+          pure ()
 
   -- BẮT ĐẦU KHÓA ROOM VÀ XỬ LÝ TICK
   gs <- takeMVar roomStateRef
