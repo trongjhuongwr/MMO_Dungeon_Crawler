@@ -7,7 +7,6 @@ import Core.Types (RoomGameState(..), Command(..))
 import Types.Player (PlayerState(..), PlayerCommand(..))
 import Types.Bullet (BulletState(..))
 import qualified Types.Bullet as Bullet
-import Types.Enemy (EnemyState(..))
 import Types.Common (Vec2(..), (*^), vecLength)
 import Types.Tank (TankType(..))
 import qualified Types.Tank as Tank
@@ -86,54 +85,18 @@ checkCollisions :: RoomGameState -> RoomGameState
 checkCollisions gs =
   let
     bullets = rgsBullets gs
-    enemies = rgsEnemies gs
     players = rgsPlayers gs
-    
-    (collidedBulletIds_Enemies, collidedEnemyIds) = findEnemyCollisions bullets enemies
     
     (collidedBulletIds_Players, updatedPlayersMap) = findPlayerCollisions bullets players
     
-    allCollidedBulletIds = nub (collidedBulletIds_Enemies ++ collidedBulletIds_Players)
+    allCollidedBulletIds = nub collidedBulletIds_Players
     
     remainingBullets = filter (\b -> bsId b `notElem` allCollidedBulletIds) bullets
-    remainingEnemies = map (damageEnemy collidedEnemyIds) enemies
 
   in
     gs { rgsBullets = remainingBullets
-       , rgsEnemies = remainingEnemies
        , rgsPlayers = updatedPlayersMap
        }
-
-damageEnemy :: [Int] -> EnemyState -> EnemyState
-damageEnemy collidedIds enemy =
-  if esId enemy `elem` collidedIds
-    then enemy { esHealth = esHealth enemy - 1 }
-    else enemy
-
-findEnemyCollisions :: [BulletState] -> [EnemyState] -> ([Int], [Int])
-findEnemyCollisions bullets enemies =
-  let
-    pairs = [(b, e) | b <- bullets, e <- enemies]
-    collisions = filter isEnemyColliding pairs
-    
-    collidedBulletIds = map (bsId . fst) collisions
-    collidedEnemyIds  = map (esId . snd) collisions
-  in
-    (collidedBulletIds, collidedEnemyIds)
-
-isEnemyColliding :: (BulletState, EnemyState) -> Bool
-isEnemyColliding (bullet, enemy) =
-  let
-    (Vec2 bx by) = bsPosition bullet
-    (Vec2 ex ey) = esPosition enemy
-    
-    enemyHalfWidth = 10.0
-    bulletHalfWidth = 2.0
-    
-    collidesX = abs (bx - ex) < (enemyHalfWidth + bulletHalfWidth)
-    collidesY = abs (by - ey) < (enemyHalfWidth + bulletHalfWidth)
-  in
-    collidesX && collidesY
 
 findPlayerCollisions :: [BulletState] -> Map.Map SockAddr PlayerState -> ([Int], Map.Map SockAddr PlayerState)
 findPlayerCollisions bullets playersMap =

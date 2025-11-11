@@ -14,7 +14,7 @@ import Control.Exception (catch, SomeException, try, SomeException(..))
 import Core.Types
 import Systems.PhysicsSystem (updatePlayerPhysics, updateBulletPhysics, filterDeadEntities)
 import Systems.CombatSystem (spawnNewBullets, resolveCollisions)
--- import Systems.AISystem (updateAI) -- PvE AI disabled
+import qualified Systems.AISystem as AISystem
 import Network.Packet
 import Data.Binary (encode)
 
@@ -83,10 +83,11 @@ gameLoop sock roomId roomStateRef = (forever $ do
 
         InProgress -> do
           let gs_with_time = gs { rgsCurrentTime = rgsCurrentTime gs + dt }
-          let gs' = updatePlayerPhysics dt gs_with_time
-          -- PvE AI disabled: do not call updateAI
-          let gs_ai = gs'
-          let gs'' = updateBulletPhysics dt gs_ai
+          let gs_with_bot_cmd = AISystem.updateBotAI dt gs_with_time
+
+          let gs' = updatePlayerPhysics dt gs_with_bot_cmd
+          
+          let gs'' = updateBulletPhysics dt gs'
           let gs''' = resolveCollisions gs'' 
           let gs'''' = spawnNewBullets (rgsCurrentTime gs_with_time) gs'''
           let gs_filtered_entities = filterDeadEntities gs''''
@@ -99,8 +100,11 @@ gameLoop sock roomId roomStateRef = (forever $ do
                        then (True, fmap psId (find (const True) (Map.elems alivePlayers_PvP)))
                        else (False, Nothing)
                 
-                -- PvE handling disabled: treat non-PvP modes as continuing (no game-over)
-                _ -> (False, Nothing)
+                PvE ->
+                  let alivePlayers_PvE = Map.filter (\p -> psLives p > 0) (rgsPlayers gs_respawned)
+                  in if Map.size alivePlayers_PvE <= 1
+                       then (True, fmap psId (find (const True) (Map.elems alivePlayers_PvE)))
+                       else (False, Nothing)
           
           if isGameOver
             then do
@@ -114,7 +118,6 @@ gameLoop sock roomId roomStateRef = (forever $ do
               -- GAME TIẾP TỤC
               let snapshot = WorldSnapshot
                     { wsPlayers = Map.elems (rgsPlayers gs_respawned)
-                    , wsEnemies = rgsEnemies gs_respawned
                     , wsBullets = rgsBullets gs_respawned
                     }
               let snapshotPacket = SUP_Snapshot snapshot

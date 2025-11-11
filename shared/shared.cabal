@@ -29,7 +29,6 @@ library
       Types.Map
       Network.Packet
       Types.Bullet
-      Types.Enemy
       Types.MatchState
       Types.GameMode
   other-modules:

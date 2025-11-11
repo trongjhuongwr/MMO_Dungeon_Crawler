@@ -6,7 +6,7 @@ module UI.Screens
   , renderRoomSelection
   , renderLobby
   , renderPostGame
-  , renderDungeonLobby
+  , renderPvEBotLobby
   , renderPauseMenu
   ) where
 
@@ -16,8 +16,7 @@ import Types.Tank (TankType(..))
 import Data.Maybe (isJust, fromJust)
 import Data.List (find)
 import qualified Data.Set as Set
-import Types (PostGameData(..), LoginData(..), ActiveField(..), RoomSelectionData(..))
-
+import Types (PostGameData(..), LoginData(..), ActiveField(..), RoomSelectionData(..), PvEBotLobbyData(..))
 -- === HÀM TIỆN ÍCH VẼ ===
 
 -- Vẽ một nút bấm
@@ -151,26 +150,34 @@ renderPostGame (PostGameData status requesters) myId = Pictures
   , drawButton (0, -60) "Exit to Menu"
   ]
 
-renderDungeonLobby :: Maybe TankType -> Picture
-renderDungeonLobby myTank = Pictures
+renderPvEBotLobby :: PvEBotLobbyData -> Picture
+renderPvEBotLobby (PvEBotLobbyData myTank botTank) = Pictures
   [ Color black $ rectangleSolid 800 600 -- Background
-  , drawText (-100, 150) 0.3 "SELECT TANK"
+  , drawText (-200, 250) 0.3 "PVE BOT MATCH"
 
-  -- Nút chọn Tank
+  -- Cột 1: Chọn Tank Của Bạn
+  , drawText (-200, 200) 0.2 "My Tank"
   , let (c1, t1) = if myTank == Just Rapid then (cyan, "Selected") else (white, "Select RAPID")
-    in Color c1 $ drawButton (-100, 0) t1
+    in Color c1 $ drawButton (-200, 150) t1
   , let (c2, t2) = if myTank == Just Blast then (orange, "Selected") else (white, "Select BLAST")
-    in Color c2 $ drawButton (100, 0) t2
+    in Color c2 $ drawButton (-200, 90) t2
+
+  -- Cột 2: Chọn Tank Của Bot
+  , drawText (200, 200) 0.2 "Bot Tank"
+  , let (c3, t3) = if botTank == Just Rapid then (cyan, "Selected") else (white, "Select RAPID")
+    in Color c3 $ drawButton (200, 150) t3
+  , let (c4, t4) = if botTank == Just Blast then (orange, "Selected") else (white, "Select BLAST")
+    in Color c4 $ drawButton (200, 90) t4
 
   -- Mô tả Tank
-  , drawText (-150, -80) 0.1 "Rapid: Speed = 100, Damage = 4, Cooldown = 0.2s"
-  , drawText (-150, -100) 0.1 "Blast: Speed = 70, Damage = 25, Cooldown = 1s"
+  , drawText (-150, -20) 0.1 "Rapid: Speed = 100, Damage = 4, Cooldown = 0.2s"
+  , drawText (-150, -40) 0.1 "Blast: Speed = 70, Damage = 25, Cooldown = 1s"
 
-  -- Nút Bắt đầu (bị vô hiệu hóa nếu chưa chọn tank)
-  , case myTank of
-      Just _ -> drawButton (0, -200) "Start PvE"
-      Nothing -> Color (greyN 0.5) $ drawButton (0, -200) "Start PvE"
-  , drawButton (0, -260) "Back"
+  -- Nút Bắt đầu (chỉ bật khi cả 2 đã chọn)
+  , case (myTank, botTank) of
+      (Just _, Just _) -> drawButton (0, -150) "Start Match"
+      _ -> Color (greyN 0.5) $ drawButton (0, -150) "Start Match"
+  , drawButton (0, -210) "Back"
   ]
 
 renderPauseMenu :: Bool -> Picture

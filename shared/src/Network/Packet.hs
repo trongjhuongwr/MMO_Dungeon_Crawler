@@ -3,13 +3,10 @@
 {-# HLINT ignore "Use camelCase" #-}
 
 module Network.Packet
-  ( -- Client -> Server
-    ClientTcpPacket(..)
+  ( ClientTcpPacket(..)
   , ClientUdpPacket(..)
-    -- Server -> Client
   , ServerTcpPacket(..)
   , ServerUdpPacket(..)
-    -- Shared types used in packets
   , WorldSnapshot(..)
   , PlayerInfo(..)
   , PlayerCommand(..)
@@ -19,7 +16,6 @@ import Data.Binary (Binary)
 import GHC.Generics (Generic)
 import Types.Player (PlayerState, PlayerCommand)
 import Types.Bullet (BulletState)
-import Types.Enemy (EnemyState)
 import Types.MatchState (MatchState)
 import Types.Tank (TankType)
 import Data.Maybe (Maybe)
@@ -38,7 +34,7 @@ data ClientTcpPacket
   | CTP_UpdateLobbyState (Maybe TankType) Bool -- (Maybe TankType, IsReady)
   | CTP_LeaveRoom
   | CTP_RequestRematch
-  | CTP_StartDungeon (Maybe TankType)
+  | CTP_StartPvEBotMatch TankType TankType
   | CTP_PauseGame Bool
   deriving (Show, Generic)
 
@@ -83,7 +79,6 @@ instance Binary ServerUdpPacket
 -- Gói tin trạng thái thế giới (Giữ nguyên)
 data WorldSnapshot = WorldSnapshot
   { wsPlayers :: [PlayerState]
-  , wsEnemies :: [EnemyState]
   , wsBullets :: [BulletState]
   } deriving (Show, Generic)
 

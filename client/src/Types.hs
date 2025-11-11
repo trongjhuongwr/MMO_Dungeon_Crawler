@@ -11,6 +11,7 @@ module Types
   , ClientState(..)
   , MatchState(..)
   , RoomSelectionData(..)
+  , PvEBotLobbyData(..)
   ) where
 
 import Network.Socket (Socket, SockAddr)
@@ -73,13 +74,18 @@ data PostGameData = PostGameData
   , pgRematchRequesters :: Set.Set Int
   }
 
+data PvEBotLobbyData = PvEBotLobbyData
+  { pveMyTank  :: Maybe TankType
+  , pveBotTank :: Maybe TankType
+  } deriving (Show)
+
 -- Trạng thái của toàn bộ ứng dụng
 data AppState
   = S_Login    LoginData    -- Màn hình đăng nhập
   | S_Menu                  -- Menu chính (Nút Start)
   | S_RoomSelection RoomSelectionData
   | S_Lobby    LobbyData    -- Sảnh chờ (Tạo/Vào phòng)
-  | S_DungeonLobby (Maybe TankType)
+  | S_PvEBotLobby PvEBotLobbyData
   | S_InGame   InGameState  -- Trạng thái game (ClientState cũ)
   | S_PostGame PostGameData -- Màn hình kết thúc (Chơi lại/Thoát)
   | S_Paused   InGameState Bool

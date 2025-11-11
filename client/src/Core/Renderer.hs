@@ -6,7 +6,6 @@ import Types.Player (PlayerState(..))
 import Types.Common (Vec2(..))
 import Types.Bullet (BulletState(..))
 import qualified Types.Bullet as Bullet
-import Types.Enemy (EnemyState(..))
 import Types.Map (GameMap(..), TileType(..)) 
 import Types.Tank (TankType(..))
 import qualified Types.Tank as Tank
@@ -92,7 +91,6 @@ render assets gameMap snapshot effects animRapid animBlast mMyId matchState =
     worldLayer = Pictures $
       [ mapPic ] ++
       otherPlayerPics ++
-      map drawEnemy (wsEnemies snapshot) ++
       map (drawBullet assets) (wsBullets snapshot) ++
       map (drawEffect assets) effects ++
       
@@ -186,13 +184,6 @@ drawBullet assets bullet =
     Translate x y $
     Rotate (90 - radToDeg correctAngle) $
     Scale 0.25 0.25 bulletPic
-
-drawEnemy :: EnemyState -> Picture
-drawEnemy enemy =
-  let
-    (x, y) = (vecX $ esPosition enemy, vecY $ esPosition enemy)
-  in
-    Translate x y $ Color red (Circle 10)
 
 drawEffect :: Resources -> Effect -> Picture
 drawEffect _ effect =
