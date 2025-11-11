@@ -8,7 +8,6 @@ import Core.Types (RoomGameState(..), Command(..))
 import Types.Player (PlayerState(..), PlayerCommand(..))
 import Types.Common (Vec2(..), (*^), vecLength)
 import Types.Bullet (BulletState(..))
-import Types.Enemy (EnemyState(..))
 import Types.Map (GameMap(..), isSolid)
 import Network.Socket (SockAddr)
 import qualified Data.Map as Map
@@ -135,6 +134,5 @@ filterDeadEntities gs =
   let
     gameMap = rgsMap gs
     aliveBullets = filter (\b -> bsLifetime b > 0 && not (isPositionSolid gameMap (bsPosition b))) (rgsBullets gs)
-    aliveEnemies = filter ((> 0) . esHealth) (rgsEnemies gs)
   in
-    gs { rgsBullets = aliveBullets, rgsEnemies = aliveEnemies }
+    gs { rgsBullets = aliveBullets }

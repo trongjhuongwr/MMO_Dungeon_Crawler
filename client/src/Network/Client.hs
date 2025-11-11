@@ -124,7 +124,7 @@ tcpListenLoop h mvar = loop LBS.empty
                 -- SỬ DỤNG CONFIG ASSETS
                 let (mapPath, mapName) = case gameMode of
                       PvP -> (Settings.mapPVP, "PvP")
-                      PvE -> (Settings.mapDungeon, "PvE")
+                      PvE -> (Settings.mapPVP, "PvE Bot Match")
                 
                 eMapData <- loadMapFromFile mapPath
                 case eMapData of
@@ -133,7 +133,7 @@ tcpListenLoop h mvar = loop LBS.empty
                     let (S_Lobby lobbyData) = csState cState
                     myTank <- case (csState cState, gameMode) of
                                 (S_Lobby ld, PvP) -> pure $ fromJust $ ldMyTank ld
-                                (S_DungeonLobby (Just tank), PvE) -> pure tank
+                                (S_PvEBotLobby (PvEBotLobbyData (Just tank) _), PvE) -> pure tank
                                 _ -> fail "Logic error: Starting the game without a tank."
                     
                     let assets = csResources cState

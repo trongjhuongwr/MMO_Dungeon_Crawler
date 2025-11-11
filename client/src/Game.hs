@@ -21,7 +21,7 @@ import Renderer.Resources (Resources(..))
 
 -- Hàm helper
 initialWorldSnapshot :: WorldSnapshot
-initialWorldSnapshot = WorldSnapshot [] [] []
+initialWorldSnapshot = WorldSnapshot [] []
 
 dummyAnim :: Resources -> Animation
 dummyAnim assets = Animation (resTurretFramesRapid assets) 0.05 0 8 False

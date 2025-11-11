@@ -23,7 +23,7 @@ handleInputIO event mvar = do
       S_Menu        -> handleInputMenu event cState
       S_RoomSelection data_ -> handleInputRoomSelection event cState
       S_Lobby data_   -> handleInputLobby event cState
-      S_DungeonLobby _ -> handleInputDungeonLobby event cState
+      S_PvEBotLobby data_ -> handleInputPvEBotLobby event cState
       S_InGame gdata  -> 
         case event of
           -- <--- LOGIC BẮT PHÍM ESC Ở ĐÂY
@@ -115,36 +115,46 @@ handleInputMenu event cState@(ClientState { csTcpHandle = h }) =
           pure cState { csState = S_RoomSelection (RoomSelectionData "" "") }
       | x > -100 && x < 100 && y > -85 && y < -35 -> do
           putStrLn "[Input] Clicked Start PvE (disabled)"
-          -- PvE feature is disabled client-side; do not enter dungeon lobby
-          pure cState
+          pure cState { csState = S_PvEBotLobby (PvEBotLobbyData Nothing Nothing) }
       | x > -100 && x < 100 && y > -145 && y < -95 -> do
           putStrLn "[Input] Clicked Start 2PvE (Disabled)"
           pure cState
       | otherwise -> pure cState
     _ -> pure cState
 
-handleInputDungeonLobby :: Event -> ClientState -> IO ClientState
-handleInputDungeonLobby event cState@(ClientState { csTcpHandle = h, csState = (S_DungeonLobby mTank) }) =
+handleInputPvEBotLobby :: Event -> ClientState -> IO ClientState
+handleInputPvEBotLobby event cState@(ClientState { csTcpHandle = h, csState = (S_PvEBotLobby ld@(PvEBotLobbyData myTank botTank)) }) =
   case event of
     (EventKey (MouseButton LeftButton) Down _ (x, y))
-      -- "Select Rapid"
-      | (x > -200 && x < 0 && y > -25 && y < 25) -> 
-          pure cState { csState = S_DungeonLobby (Just Rapid) }
-      -- "Select Blast"
-      | (x > 0 && x < 200 && y > -25 && y < 25) -> 
-          pure cState { csState = S_DungeonLobby (Just Blast) }
-      -- "Start Dungeon"
-      | (x > -100 && x < 100 && y > -225 && y < -175) -> do 
-          -- PvE is disabled: do not send start request
-          putStrLn "[Input] Start Dungeon pressed, but PvE is disabled."
-          pure cState
-      -- VÙNG CLICK NÚT "BACK" (cho y = -260)
-      | (x > -100 && x < 100 && y > -285 && y < -235) -> do
+      -- Cột 1: My Tank
+      | (x > -300 && x < -100 && y > 125 && y < 175) -> -- My Rapid
+          pure cState { csState = S_PvEBotLobby (ld { pveMyTank = Just Rapid }) }
+      | (x > -300 && x < -100 && y > 65 && y < 115) -> -- My Blast
+          pure cState { csState = S_PvEBotLobby (ld { pveMyTank = Just Blast }) }
+      
+      -- Cột 2: Bot Tank
+      | (x > 100 && x < 300 && y > 125 && y < 175) -> -- Bot Rapid
+          pure cState { csState = S_PvEBotLobby (ld { pveBotTank = Just Rapid }) }
+      | (x > 100 && x < 300 && y > 65 && y < 115) -> -- Bot Blast
+          pure cState { csState = S_PvEBotLobby (ld { pveBotTank = Just Blast }) }
+
+      -- Nút Start
+      | (x > -100 && x < 100 && y > -175 && y < -125) -> do
+          case (myTank, botTank) of
+            (Just myT, Just botT) -> do
+              putStrLn "[Input] Starting PvE Bot Match..."
+              -- Gửi gói tin mới
+              sendTcpPacket h (CTP_StartPvEBotMatch myT botT)
+              pure cState
+            _ -> pure cState -- Nút bị vô hiệu hóa, không làm gì
+
+      -- Nút Back
+      | (x > -100 && x < 100 && y > -235 && y < -185) -> do
           putStrLn "[Input] Back to Menu"
           pure cState { csState = S_Menu }
       | otherwise -> pure cState
     _ -> pure cState
-handleInputDungeonLobby _ cState = pure cState
+handleInputPvEBotLobby _ cState = pure cState
 
 -- === ROOM SELECTION ===
 handleInputRoomSelection :: Event -> ClientState -> IO ClientState

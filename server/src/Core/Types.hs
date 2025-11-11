@@ -6,7 +6,6 @@ import Network.Socket (SockAddr, Socket)
 import Types.Player (PlayerCommand, PlayerState(..))
 import Types.Common (Vec2(..))
 import Types.Bullet (BulletState(..))
-import Types.Enemy (EnemyState(..))
 import Types.Map (GameMap)
 import Types.Tank (TankType) 
 import qualified Data.Map as Map
@@ -22,7 +21,6 @@ data RoomGameState = RoomGameState
   { rgsTick     :: Int
   , rgsCommands :: [Command]
   , rgsPlayers  :: Map.Map SockAddr PlayerState 
-  , rgsEnemies  :: [EnemyState]
   , rgsBullets  :: [BulletState]
   , rgsNextId   :: Int 
   , rgsMap      :: GameMap
@@ -40,7 +38,6 @@ initialRoomGameState loadedMap spawnPoints mode = RoomGameState
   { rgsTick = 0
   , rgsCommands = []
   , rgsPlayers = Map.empty
-  , rgsEnemies = [] 
   , rgsBullets = []
   , rgsNextId = 1
   , rgsMap = loadedMap     
@@ -51,13 +48,13 @@ initialRoomGameState loadedMap spawnPoints mode = RoomGameState
   , rgsCurrentTime = 0.0
   }
 
-initialPlayerState :: Vec2 -> Int -> TankType -> PlayerState
-initialPlayerState spawnPos playerId tankType = PlayerState
+initialPlayerState :: Vec2 -> Int -> TankType -> Float -> PlayerState
+initialPlayerState spawnPos playerId tankType initialAngle = PlayerState
   { 
     psId = playerId
   , psPosition = spawnPos
-  , psBodyAngle = 0.0
-  , psTurretAngle = 0.0
+  , psBodyAngle = initialAngle
+  , psTurretAngle = initialAngle
   , psHealth = 100
   , psTankType = tankType
   , psLives = 3

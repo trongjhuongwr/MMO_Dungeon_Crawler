@@ -89,7 +89,7 @@ renderIO mvar = do
     S_Menu -> pure renderMenu
     S_RoomSelection rsd -> pure $ renderRoomSelection rsd
     S_Lobby (LobbyData rId pInfo myTank myReady) -> pure $ renderLobby rId pInfo (csMyId cState) myTank myReady
-    S_DungeonLobby mTank -> pure $ renderDungeonLobby mTank
+    S_PvEBotLobby data_ -> pure $ renderPvEBotLobby data_
     S_InGame gdata -> 
       pure $ render (csResources cState) (igsGameMap gdata) (igsWorld gdata) 
                     (igsEffects gdata) (igsTurretAnimRapid gdata) 
