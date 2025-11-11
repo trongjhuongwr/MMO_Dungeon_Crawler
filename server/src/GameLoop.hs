@@ -1,4 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Move brackets to avoid $" #-}
 
 module GameLoop (gameLoop) where
 
@@ -59,8 +61,8 @@ respawnDeadPlayers gs =
 
 
 -- VÒNG LẶP GAME CỦA MỘT PHÒNG
-gameLoop :: Socket -> String -> MVar RoomGameState -> IO ()
-gameLoop sock roomId roomStateRef = (forever $ do
+gameLoop :: Socket -> String -> MVar RoomGameState -> MVar ServerState -> IO ()
+gameLoop sock roomId roomStateRef serverStateRef = (forever $ do
   gs <- takeMVar roomStateRef
   
   -- 1. KIỂM TRA PAUSE
@@ -137,9 +139,12 @@ gameLoop sock roomId roomStateRef = (forever $ do
       let cleanGameState = finalGameState { rgsCommands = [] }
       putMVar roomStateRef cleanGameState
       
-      -- 5. KIỂM TRA THOÁT LOOP
-      when (isMatchOver cleanGameState) (breakLoop roomId)
-      
+      -- 5. KIỂM TRA XEM ROOM CÒN TỒN TẠI KHÔNG (THÊM KHỐI NÀY)
+      sState <- readMVar serverStateRef
+      when (Map.notMember roomId (ssRooms sState)) $ do
+        putStrLn $ "[GameLoop " ++ roomId ++ "] Room deleted by TCPServer. Stopping thread."
+        fail "Room cleanup." -- 'fail' ở đây an toàn, để thoát thread
+
       threadDelay tickInterval -- <-- HÀNH ĐỘNG CUỐI CÙNG CỦA 'else'
 
   ) `catch` \(e :: SomeException) -> do
@@ -164,21 +169,3 @@ gameLoop sock roomId roomStateRef = (forever $ do
       (void $ BS.sendTo sock strictPkt addr) `catch` \(e :: SomeException) -> do
         putStrLn $ "[UDP] Failed to send packet to " ++ show addr ++ ": " ++ show e
         pure () -- Bỏ qua lỗi và tiếp tục
-
-    -- Kiểm tra game over
-    isMatchOver :: RoomGameState -> Bool
-    isMatchOver gs = case rgsMatchState gs of
-      GameOver _ -> True
-      _          -> False
-
-    -- Dừng vòng lặp
-    breakLoop :: String -> IO ()
-    breakLoop roomId = do
-      putStrLn $ "[GameLoop " ++ roomId ++ "] Match finished. Stopping game loop thread."
-      
-      -- XÓA DÒNG NÀY ĐỂ TRÁNH DEADLOCK
-      -- modifyMVar_ serverStateRef $ \sState ->
-      --  pure sState { ssRooms = Map.delete roomId (ssRooms sState) }
-      
-      -- Chỉ cần thoát vòng lặp
-      fail "Game loop finished."
