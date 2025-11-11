@@ -137,11 +137,22 @@ tcpListenLoop h mvar = loop LBS.empty
                 case eMapData of
                   Left err -> putStrLn ("Failed to load map: " ++ err) >> pure cState
                   Right (gmap, _) -> do
-                    let (S_Lobby lobbyData) = csState cState
-                    myTank <- case (csState cState, gameMode) of
-                                (S_Lobby ld, PvP) -> pure $ fromJust $ ldMyTank ld
-                                (S_PvEBotLobby (PvEBotLobbyData (Just tank) _), PvE) -> pure tank
-                                _ -> fail "Logic error: Starting the game without a tank."
+                    myTank <- case (csState cState) of
+                      -- Trạng thái trận đầu (PvP)
+                      (S_Lobby ld) -> 
+                        pure $ fromJust $ ldMyTank ld
+                      
+                      -- Trạng thái trận đầu (PvE)
+                      (S_PvEBotLobby (PvEBotLobbyData (Just tank) _)) ->
+                        pure tank
+                        
+                      -- Trạng thái Đấu Lại (Cả PvP và PvE)
+                      (S_PostGame pgd) ->
+                        pure $ pgMyLastTank pgd
+                        
+                      -- Các trạng thái không hợp lệ khác
+                      _ -> 
+                        fail "Lỗi Client: Nhận STP_GameStarting khi đang ở trạng thái không hợp lệ (ví dụ: không phải S_Lobby hoặc S_PostGame)"
                     
                     let assets = csResources cState
                     let animR = (dummyAnim assets) { animFrames = resTurretFramesRapid assets }

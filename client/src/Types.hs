@@ -35,6 +35,8 @@ import Types.GameMode (GameMode)
 -- KIỂU DỮ LIỆU STATE MÁY
 -- ===================================================================
 
+data ActiveField = UserField | PassField deriving (Eq, Show)
+
 -- Trạng thái khi đang trong game
 data InGameState = InGameState
   { igsKeys              :: KeyMap
@@ -50,8 +52,6 @@ data InGameState = InGameState
   , igsMatchState        :: MatchState
   , igsMode              :: GameMode
   }
-
-data ActiveField = UserField | PassField deriving (Eq, Show)
 
 -- Dữ liệu cho màn hình Login
 data LoginData = LoginData 
@@ -72,6 +72,7 @@ data LobbyData = LobbyData
 data PostGameData = PostGameData 
   { pgStatus :: String 
   , pgRematchRequesters :: Set.Set Int
+  , pgMyLastTank :: TankType
   }
 
 data PvEBotLobbyData = PvEBotLobbyData

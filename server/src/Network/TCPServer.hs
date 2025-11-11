@@ -462,7 +462,11 @@ processPacket dbConn mPid h pkt sState serverStateRef =
             then do
               putStrLn $ "[TCP] Room " ++ roomId ++ " is starting a rematch!"
               
-              -- B2: Tạo action
+              -- B2: Lấy GameMode HIỆN TẠI từ MVar (An toàn vì mode không thay đổi)
+              rgs_peek <- readMVar gameMVar
+              let currentGameMode = rgsMode rgs_peek -- <--- Lấy mode hiện tại (PvP hoặc PvE)
+
+              -- Tạo action reset game (giữ nguyên)
               let resetGameAction = modifyMVar_ gameMVar $ \rgs -> do
                     let getSpawnPos pId spawns = if null spawns
                                                   then Vec2 100 100
@@ -480,7 +484,9 @@ processPacket dbConn mPid h pkt sState serverStateRef =
               -- B3: Cập nhật S-lock
               let finalRoom = updatedRoom { roomRematchRequests = Set.empty }
               let finalRooms = Map.insert roomId finalRoom (ssRooms sState)
-              let broadcastActions = broadcastToRoom finalRoom (STP_GameStarting PvP)
+              
+              -- SỬA LỖI: Gửi đúng GameMode đã lấy
+              let broadcastActions = broadcastToRoom finalRoom (STP_GameStarting currentGameMode) -- <--- ĐÃ SỬA
               
               pure (sState { ssRooms = finalRooms }, (Just pid, resetGameAction : broadcastActions))
               
