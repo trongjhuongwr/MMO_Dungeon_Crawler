@@ -54,7 +54,7 @@ instance Binary ClientUdpPacket
 
 -- Gói tin TCP (Dùng cho Login, Lobby, Quản lý phòng)
 data ServerTcpPacket
-  = STP_LoginResult Bool Int String    -- (success, yourPlayerId, message)
+  = STP_LoginResult Bool Int String String -- (success, yourPlayerId, username, message)
   | STP_RoomUpdate String [PlayerInfo] -- (roomId, list of players in room)
   | STP_GameStarting GameMode          -- Thông báo bắt đầu game (với chế độ chơi)
   | STP_ShowMenu                       -- Yêu cầu client quay về menu

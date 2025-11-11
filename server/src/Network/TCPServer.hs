@@ -205,15 +205,15 @@ processPacket dbConn mPid h pkt sState serverStateRef =
       case eResult of
         Left dbErr -> do
           putStrLn $ "[DB Error] Register: " ++ show dbErr
-          let action = sendTcpPacket h (STP_LoginResult False 0 "Registration failed (DB Error)")
+          let action = sendTcpPacket h (STP_LoginResult False 0 "" "Registration failed (DB Error)")
           pure (sState, (Nothing, [action]))
         Right (Left errMsg) -> do
           putStrLn $ "[Auth] Register failed: " ++ errMsg
-          let action = sendTcpPacket h (STP_LoginResult False 0 errMsg)
+          let action = sendTcpPacket h (STP_LoginResult False 0 "" errMsg)
           pure (sState, (Nothing, [action]))
         Right (Right newId) -> do
           putStrLn $ "[Auth] Register success for " ++ user ++ " (ID: " ++ show newId ++ ")"
-          let action = sendTcpPacket h (STP_LoginResult False 0 "Registration successful. Please log in.")
+          let action = sendTcpPacket h (STP_LoginResult False 0 "" "Registration successful. Please log in.")
           pure (sState, (Nothing, [action]))
 
     -- === XỬ LÝ ĐĂNG NHẬP ===
@@ -222,23 +222,24 @@ processPacket dbConn mPid h pkt sState serverStateRef =
       case eResult of
         Left dbErr -> do
           putStrLn $ "[DB Error] Login: " ++ show dbErr
-          let action = sendTcpPacket h (STP_LoginResult False 0 "Login failed (DB Error)")
+          let action = sendTcpPacket h (STP_LoginResult False 0 "" "Login failed (DB Error)")
           pure (sState, (Nothing, [action]))
         Right Nothing -> do
           putStrLn $ "[Auth] Login failed for " ++ user
-          let action = sendTcpPacket h (STP_LoginResult False 0 "Invalid username or password")
+          let action = sendTcpPacket h (STP_LoginResult False 0 "" "Invalid username or password")
           pure (sState, (Nothing, [action]))
         Right (Just (pid, username)) -> do
           putStrLn $ "[Auth] Login success for " ++ user ++ " (ID: " ++ show pid ++ ")"
           
           -- Tạo PlayerClient và thêm vào ServerState
-          let newPlayerInfo = PlayerInfo pid (T.unpack username) Nothing False
+          let strUsername = T.unpack username 
+          let newPlayerInfo = PlayerInfo pid strUsername Nothing False
           let newClient = PlayerClient h newPlayerInfo Nothing
           let newClients = Map.insert pid newClient (ssClients sState)
           -- Cập nhật NextPlayerId để tránh trùng lặp nếu server restart nhưng DB thì không
           let newState = sState { ssClients = newClients, ssNextPlayerId = max (ssNextPlayerId sState) (pid + 1) }
           
-          let action = sendTcpPacket h (STP_LoginResult True pid "Login successful")
+          let action = sendTcpPacket h (STP_LoginResult True pid strUsername "Login successful")
           -- Trả về (Just pid) để cập nhật state của vòng lặp
           pure (newState, (Just pid, [action]))
 

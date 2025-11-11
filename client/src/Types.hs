@@ -96,6 +96,7 @@ data ClientState = ClientState
   , csUdpSocket  :: Socket     -- Socket UDP
   , csServerAddr :: SockAddr   -- Địa chỉ UDP của server
   , csMyId       :: Int        -- ID của mình (lấy sau khi login)
+  , csUsername   :: String
   , csState      :: AppState
   , csResources  :: Resources
   }

@@ -27,65 +27,65 @@ drawButton (x, y) text = Pictures
   , Translate x y $ Color white $ rectangleWire 200 50
   ]
 
--- Vẽ text
 drawText :: (Float, Float) -> Float -> String -> Picture
-drawText (x, y) size text = Translate x y $ Scale size size $ Color white $ Text text
+drawText (x, y) size text = Translate x y $ Scale size size $ Text text
 
 -- === CÁC MÀN HÌNH ===
 
 renderLogin :: LoginData -> Picture
 renderLogin (LoginData username password status activeField) = Pictures
   [ Color black $ rectangleSolid 800 600   -- Background
-  , drawText (-80, 150) 0.3 "LOGIN"
+  , Color white $ drawText (-80, 150) 0.3 "LOGIN"
 
   -- Username
-  , drawText (-200, 40) 0.2 "Username:"
-  , drawButton (80, 50) username
+  , Color white $ drawText (-200, 40) 0.2 "Username:"
+  , Color white $ drawButton (80, 50) username
   , if activeField == UserField -- Hiển thị viền active
       then Translate 80 50 $ Color yellow $ rectangleWire 200 50
       else Blank
 
   -- Password
-  , drawText (-200, -40) 0.2 "Password:"
-  , drawButton (80, -30) (map (const '*') password) -- Hiển thị '*'
+  , Color white $ drawText (-200, -40) 0.2 "Password:"
+  , Color white $ drawButton (80, -30) (map (const '*') password) -- Hiển thị '*'
   , if activeField == PassField -- Hiển thị viền active
       then Translate 80 (-30) $ Color yellow $ rectangleWire 200 50
       else Blank
 
   -- Nút Login (trước là "Submit")
-  , drawButton (-100, -150) "   Login"
+  , Color white $ drawButton (-100, -150) "   Login"
 
   -- Nút Register MỚI
-  , drawButton (100, -150) " Register"
+  , Color white $ drawButton (100, -150) " Register"
 
-  , drawText (-80, -200) 0.1 status
+  , Color white $ drawText (-80, -200) 0.1 status
   ]
 
-renderMenu :: Picture
-renderMenu = Pictures
-  [ Color black $ rectangleSolid 800 600   -- Background
-  , drawText (-100, 100) 0.4 "MAIN MENU"
-  , drawButton (0, 0) "  PvP"
-  , Color (greyN 0.5) $ drawButton (0, -60) "PvE (Disabled)"
+renderMenu :: String -> Picture
+renderMenu username = Pictures
+  [ Color black $ rectangleSolid 800 600 
+  , Color (light cyan) $ drawText (-150, 200) 0.5 ("HELLO " ++ username)
+  , Color white $ drawText (-100, 100) 0.4 "MAIN MENU"
+  , Color white $ drawButton (0, 0) "  PvP"
+  , Color (greyN 0.5) $ drawButton (0, -60) "  PvE"
   , Color (greyN 0.5) $ drawButton (0, -120) "2PvE (Disabled)"
   ]
 
 renderRoomSelection :: RoomSelectionData -> Picture
 renderRoomSelection rsd = Pictures
   [ Color black $ rectangleSolid 800 600
-  , drawText (-150, 100) 0.3 "PVP LOBBY"
-  , drawButton (0, 0) "Create Room"
-  , drawButton (0, -60) "Join Room"
-  , drawText (-150, -120) 0.2 "Room ID:"
-  , drawButton (0, -150) (rsdRoomId rsd) 
-  , drawButton (0, -210) "Back"
+  , Color white $ drawText (-150, 100) 0.3 "PVP LOBBY"
+  , Color white $ drawButton (0, 0) "Create Room"
+  , Color white $ drawButton (0, -60) "Join Room"
+  , Color white $ drawText (-150, -120) 0.2 "Room ID:"
+  , Color white $ drawButton (0, -150) (rsdRoomId rsd) 
+  , Color white $ drawButton (0, -210) "Back"
   , Translate (-200) (-250) $ Scale 0.15 0.15 $ Color red $ Text (rsdError rsd)
   ]
 
 renderLobby :: String -> [PlayerInfo] -> Int -> Maybe TankType -> Bool -> Picture
 renderLobby roomId players myId myTank myReady = Pictures
   [ Color black $ rectangleSolid 800 600   -- Background
-  , drawText (-350, 250) 0.2 ("Room ID: " ++ roomId)
+  , Color white $ drawText (-350, 250) 0.2 ("Room ID: " ++ roomId)
   
   -- Thông tin người chơi
   , drawPlayerInfo 1 (getPlayer 1 players) myId
@@ -98,13 +98,13 @@ renderLobby roomId players myId myTank myReady = Pictures
     in Color c2 $ drawButton (100, -50) t2
     
   -- Mô tả Tank
-  , drawText (-100, -100) 0.1 "Rapid: Speed = 100, Damage = 4, Cooldown = 0.2s"
-  , drawText (-100, -120) 0.1 "Blast: Speed = 70, Damage = 25, Cooldown = 1s"
+  , Color (light cyan) $ drawText (-100, -100) 0.1 "Rapid: Speed = 100, Damage = 4, Cooldown = 0.2s"
+  , Color (light cyan) $ drawText (-100, -120) 0.1 "Blast: Speed = 70, Damage = 25, Cooldown = 1s"
     
   -- Nút Sẵn sàng
   , let (c3, t3) = if myReady then (green, "NOT READY") else (red, "READY")
     in Color c3 $ drawButton (0, -200) t3
-  , drawButton (0, -260) "BACK"
+  , Color white $ drawButton (0, -260) "BACK"
   ]
   where
     getPlayer :: Int -> [PlayerInfo] -> Maybe PlayerInfo
@@ -135,7 +135,7 @@ renderLobby roomId players myId myTank myReady = Pictures
 renderPostGame :: PostGameData -> Int -> Picture
 renderPostGame (PostGameData status requesters) myId = Pictures
   [ Color black $ rectangleSolid 800 600 -- Background
-  , drawText (-100, 100) 0.5 status
+  , Color white $ drawText (-100, 100) 0.5 status
   
   -- Logic cho nút Rematch
   , let
@@ -144,54 +144,54 @@ renderPostGame (PostGameData status requesters) myId = Pictures
         else (drawButton (0, 0) "Rematch", "")
     in Pictures 
       [ buttonPic
-      , drawText (-150, -25) 0.1 helpText
+      , Color white $ drawText (-150, -25) 0.1 helpText
       ]
       
-  , drawButton (0, -60) "Exit to Menu"
+  , Color white $ drawButton (0, -60) "Exit to Menu"
   ]
 
 renderPvEBotLobby :: PvEBotLobbyData -> Picture
 renderPvEBotLobby (PvEBotLobbyData myTank botTank) = Pictures
   [ Color black $ rectangleSolid 800 600 -- Background
-  , drawText (-200, 250) 0.3 "PVE BOT MATCH"
+  , Color white $ drawText (-200, 250) 0.3 "PVE BOT MATCH"
 
   -- Cột 1: Chọn Tank Của Bạn
-  , drawText (-200, 200) 0.2 "My Tank"
+  , Color white $ drawText (-200, 200) 0.2 "My Tank"
   , let (c1, t1) = if myTank == Just Rapid then (cyan, "Selected") else (white, "Select RAPID")
     in Color c1 $ drawButton (-200, 150) t1
   , let (c2, t2) = if myTank == Just Blast then (orange, "Selected") else (white, "Select BLAST")
     in Color c2 $ drawButton (-200, 90) t2
 
   -- Cột 2: Chọn Tank Của Bot
-  , drawText (200, 200) 0.2 "Bot Tank"
+  , Color white $ drawText (200, 200) 0.2 "Bot Tank"
   , let (c3, t3) = if botTank == Just Rapid then (cyan, "Selected") else (white, "Select RAPID")
     in Color c3 $ drawButton (200, 150) t3
   , let (c4, t4) = if botTank == Just Blast then (orange, "Selected") else (white, "Select BLAST")
     in Color c4 $ drawButton (200, 90) t4
 
   -- Mô tả Tank
-  , drawText (-150, -20) 0.1 "Rapid: Speed = 100, Damage = 4, Cooldown = 0.2s"
-  , drawText (-150, -40) 0.1 "Blast: Speed = 70, Damage = 25, Cooldown = 1s"
+  , Color (light cyan) $ drawText (-150, -20) 0.1 "Rapid: Speed = 100, Damage = 4, Cooldown = 0.2s"
+  , Color (light cyan) $ drawText (-150, -40) 0.1 "Blast: Speed = 70, Damage = 25, Cooldown = 1s"
 
   -- Nút Bắt đầu (chỉ bật khi cả 2 đã chọn)
   , case (myTank, botTank) of
-      (Just _, Just _) -> drawButton (0, -150) "Start Match"
+      (Just _, Just _) -> Color white $ drawButton (0, -150) "Start Match"
       _ -> Color (greyN 0.5) $ drawButton (0, -150) "Start Match"
-  , drawButton (0, -210) "Back"
+  , Color white $ drawButton (0, -210) "Back"
   ]
 
 renderPauseMenu :: Bool -> Picture
 renderPauseMenu isConfirmingExit =
   if isConfirmingExit
     then Pictures
-      [ drawText (-250, 50) 0.3 "Exit to Menu?"
-      , drawText (-300, 0) 0.2 "All progress in this run will be lost."
-      , drawButton (-100, -100) "Yes, Exit"
-      , drawButton (100, -100) "No, Cancel"
+      [ Color white $ drawText (-250, 50) 0.3 "Exit to Menu?"
+      , Color white $ drawText (-300, 0) 0.2 "All progress in this run will be lost."
+      , Color white $ drawButton (-100, -100) "Yes, Exit"
+      , Color white $ drawButton (100, -100) "No, Cancel"
       ]
     else Pictures
-      [ drawText (-100, 200) 0.4 "PAUSED"
-      , drawButton (0, 100) "Continue"
+      [ Color white $ drawText (-100, 200) 0.4 "PAUSED"
+      , Color white $ drawButton (0, 100) "Continue"
       , Color (greyN 0.5) $ drawButton (0, 40) "Settings (Disabled)"
-      , drawButton (0, -20) "Exit to Menu"
+      , Color white $ drawButton (0, -20) "Exit to Menu"
       ]
