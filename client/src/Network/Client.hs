@@ -115,9 +115,9 @@ tcpListenLoop h mvar = loop LBS.empty
           -- Xử lý packet (logic không đổi)
           modifyMVar_ mvar $ \cState -> do
             case pkt of
-              STP_LoginResult success pid msg ->
+              STP_LoginResult success pid username msg ->
                 if success
-                then pure cState { csMyId = pid, csState = S_Menu }
+                then pure cState { csMyId = pid, csUsername = username, csState = S_Menu } 
                 else pure cState { csState = S_Login (LoginData "" "" msg UserField) }
                 
               STP_RoomUpdate roomId pInfos ->
