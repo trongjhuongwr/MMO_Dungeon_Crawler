@@ -307,7 +307,7 @@ processPacket dbConn mPid h pkt sState serverStateRef =
       let udpSock = ssUdpSocket sState
 
       -- 4. Tạo actions
-      let gameLoopAction = forkIO $ gameLoop udpSock newRoomId roomGameMVar
+      let gameLoopAction = forkIO $ gameLoop udpSock newRoomId roomGameMVar serverStateRef
       let clientAction = sendTcpPacket h (STP_GameStarting PvE)
       let allActions = [void gameLoopAction, clientAction]
 
