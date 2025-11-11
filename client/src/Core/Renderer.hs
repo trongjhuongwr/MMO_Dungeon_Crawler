@@ -173,6 +173,7 @@ drawOtherPlayer assets ps =
           Scale tankScale tankScale bodyPic
       , Rotate (radToDeg $ psTurretAngle ps) $
           Scale tankScale tankScale turretPic
+      , healthBarPic
       ]
 
 
