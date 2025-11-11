@@ -29,14 +29,19 @@ import qualified Types.Tank as Tank
 import Network.Packet
 import GameLoop (gameLoop) 
 import Types.MatchState (MatchState(..)) 
-import Types.Common (Vec2(..)) 
 import Core.Config (AppConfig(..))
 import qualified Utils.Random as Rnd (getRandomNumber)
 import qualified Data.ByteString as BS 
 import qualified Data.ByteString as BS (hPut)
 import Data.ByteString.Lazy.Internal (fromStrict, toStrict)
 import Types.GameMode (GameMode(..))
+import Types.Map (GameMap(..))
 import Types.Player (PlayerState(..))
+import Types.Common (Vec2(..))
+import qualified Systems.AISystem as AISystem 
+
+serverTileSize :: Float
+serverTileSize = 32.0
 
 -- Hàm tiện ích để gửi gói tin TCP (an toàn)
 sendTcpPacket :: Handle -> ServerTcpPacket -> IO ()
@@ -262,10 +267,51 @@ processPacket dbConn mPid h pkt sState serverStateRef =
           let actions = broadcastRoomUpdate updatedRoom -- Lấy list [IO ()]
           pure (sState { ssRooms = newRooms }, (Just pid, actions))
       
-    (CTP_StartDungeon mTank, Just pid) -> do
-      putStrLn $ "[TCP] Client " ++ show pid ++ " requested Dungeon start, but PvE is disabled."
-      let action = sendTcpPacket h (STP_Kicked "PvE mode is disabled on this server")
-      pure (sState, (Just pid, [action]))
+    (CTP_StartPvEBotMatch myTank botTank, Just pid) -> do
+      putStrLn $ "[TCP] Client " ++ show pid ++ " starting PvE Bot Match."
+
+      -- 1. Tạo phòng mới
+      newRoomId <- generateRoomId
+      let client = ssClients sState Map.! pid
+
+      -- 2. Tạo GameState
+      let spawns = ssSpawns sState
+      let gameMap = ssMap sState
+      let GameMap { gmapWidth = gw, gmapHeight = gh } = gameMap
+      let mapCenter = Vec2 (fromIntegral gw * serverTileSize / 2.0)
+                           (fromIntegral gh * serverTileSize / 2.0)
+
+      let p1_spawn = if not (null spawns) then spawns !! 0 else Vec2 100 100
+      let p2_spawn = if length spawns > 1 then spawns !! 1 else Vec2 700 500
+
+      let p1_angle = atan2 (vecX (mapCenter - p1_spawn)) (vecY (mapCenter - p1_spawn))
+      let p2_angle = atan2 (vecX (mapCenter - p2_spawn)) (vecY (mapCenter - p2_spawn))
+
+      let p1_state = initialPlayerState p1_spawn pid myTank p1_angle
+      let p2_state = initialPlayerState p2_spawn AISystem.botPlayerId botTank p2_angle
+
+      -- Dùng fake address cho state (giống PvP)
+      let fakeAddr1 = SockAddrInet 1 (tupleToHostAddress (127,0,0,1))
+      let fakeAddr2 = SockAddrInet 2 (tupleToHostAddress (127,0,0,2))
+
+      let playerStates = Map.fromList [(fakeAddr1, p1_state), (fakeAddr2, p2_state)]
+
+      let newRoomGame = initialRoomGameState gameMap spawns PvE
+      let newRoomGame' = newRoomGame { rgsPlayers = playerStates, rgsMatchState = InProgress }
+
+      roomGameMVar <- newMVar newRoomGame'
+
+      -- 3. Cập nhật ServerState
+      let finalRoom = Room newRoomId (Map.singleton pid client) (Just roomGameMVar) Set.empty
+      let finalRooms = Map.insert newRoomId finalRoom (ssRooms sState)
+      let udpSock = ssUdpSocket sState
+
+      -- 4. Tạo actions
+      let gameLoopAction = forkIO $ gameLoop udpSock newRoomId roomGameMVar
+      let clientAction = sendTcpPacket h (STP_GameStarting PvE)
+      let allActions = [void gameLoopAction, clientAction]
+
+      pure (sState { ssRooms = finalRooms }, (Just pid, allActions))
 
     (CTP_UpdateLobbyState mTank isReady, Just pid) -> do
       let (mRoom, mRoomId) = findRoomByPlayerId pid sState
@@ -291,20 +337,32 @@ processPacket dbConn mPid h pkt sState serverStateRef =
               let p2_info = pInfos !! 1
               
               let spawns = ssSpawns sState
+
+              let gameMap = ssMap sState
+              let GameMap { gmapWidth = gw, gmapHeight = gh } = gameMap
+              let mapCenter = Vec2 (fromIntegral gw * serverTileSize / 2.0)
+                                   (fromIntegral gh * serverTileSize / 2.0)
+
               let p1_spawn = if not (null spawns) then spawns !! 0 else Vec2 100 100
               let p2_spawn = if length spawns > 1 then spawns !! 1 else Vec2 700 500
 
               case (piSelectedTank p1_info, piSelectedTank p2_info) of
                 (Just tank1, Just tank2) -> do
-                  let p1_state = initialPlayerState p1_spawn (piId p1_info) tank1
-                  let p2_state = initialPlayerState p2_spawn (piId p2_info) tank2
+
+                  -- TÍNH TOÁN GÓC
+                  let p1_angle = atan2 (vecX (mapCenter - p1_spawn)) (vecY (mapCenter - p1_spawn))
+                  let p2_angle = atan2 (vecX (mapCenter - p2_spawn)) (vecY (mapCenter - p2_spawn))
+
+                  -- TRUYỀN GÓC VÀO
+                  let p1_state = initialPlayerState p1_spawn (piId p1_info) tank1 p1_angle
+                  let p2_state = initialPlayerState p2_spawn (piId p2_info) tank2 p2_angle
                   
                   let fakeAddr1 = SockAddrInet 1 (tupleToHostAddress (127,0,0,1))
                   let fakeAddr2 = SockAddrInet 2 (tupleToHostAddress (127,0,0,2))
                   
                   let playerStates = Map.fromList [(fakeAddr1, p1_state), (fakeAddr2, p2_state)]
                   
-                  let newRoomGame = initialRoomGameState (ssMap sState) (ssSpawns sState) PvP
+                  let newRoomGame = initialRoomGameState gameMap spawns PvP -- <-- SỬA (ssMap sState)
                   let newRoomGame' = newRoomGame { rgsPlayers = playerStates, rgsMatchState = InProgress }
                   
                   roomGameMVar <- newMVar newRoomGame'
