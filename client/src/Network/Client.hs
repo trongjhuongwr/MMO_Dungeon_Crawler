@@ -88,7 +88,7 @@ tcpListenLoop :: Handle -> MVar ClientState -> IO ()
 tcpListenLoop h mvar = 
   (loop LBS.empty) `catch` \(e :: SomeException) -> do
     putStrLn $ "[TCP] Listener thread crashed: " ++ show e    
-    handleDisconnect
+    handleDisconnect mvar
   where
     -- Vòng lặp 'loop' chỉ ĐỌC từ socket và GỌI 'processBuffer'    
     
@@ -103,7 +103,7 @@ tcpListenLoop h mvar =
           Right bs -> pure bs
 
       if BS.null strictChunk && LBS.null buffer
-      then handleDisconnect
+      then handleDisconnect mvar
       else do
         let fullBuffer = buffer <> fromStrict strictChunk
         processBuffer fullBuffer -- Luôn gọi processBuffer với buffer MỚI
@@ -215,22 +215,39 @@ tcpListenLoop h mvar =
               putStrLn $ "[TCP] Processing " ++ show (LBS.length remaining) ++ " remaining bytes in buffer."
               processBuffer remaining -- Đệ quy 'processBuffer'
 
-    handleDisconnect :: IO ()
-    handleDisconnect = do
+    handleDisconnect :: MVar ClientState -> IO ()
+    handleDisconnect mvar = do
       putStrLn "[TCP] Connection lost or closed. Resetting to Login screen."
 
-      void (try (hClose h) :: IO (Either SomeException ()))
-
-      -- Reset MVar về trạng thái ban đầu
+      -- KHÔNG GỌI hClose h ở đây.
+      -- Luồng T_Closer (từ Events.hs) hoặc lỗi mạng
+      -- sẽ tự xử lý việc đóng handle.
+      
+      -- 2. Cập nhật MVar (chỉ khi handle vẫn còn trong state)
       modifyMVar_ mvar $ \cState ->
-        pure $ cState 
-          { csTcpHandle  = Nothing
-          , csUdpSocket  = Nothing
-          , csServerAddr = Nothing
-          , csMyId       = 0
-          , csUsername   = ""
-          , csState      = S_Login (LoginData "" "" "Disconnected" UserField)
-          }
+        
+        case csTcpHandle cState of
+          
+          Just _ -> do
+            -- Handle vẫn còn đó. Tức là đây là một lỗi
+            -- mạng *thực sự* (không phải do logout kích hoạt).
+            -- Chúng ta phải dọn dẹp state.
+            putStrLn "[TCP] Network error detected. Resetting state."
+            pure $ cState 
+              { csTcpHandle  = Nothing -- Xóa handle đi
+              , csUdpSocket  = Nothing
+              , csServerAddr = Nothing
+              , csMyId       = 0
+              , csUsername   = ""
+              , csState      = S_Login (LoginData "" "" "Disconnected" UserField)
+              }
+              
+          Nothing -> do
+            -- Handle là Nothing.
+            -- Nghĩa là nút Logout (Main Thread) đã xử lý rồi.
+            -- Không làm gì cả, giữ nguyên state S_Login mà Logout đã set.
+            putStrLn "[TCP] Logout already handled. Thread exiting."
+            pure cState
   
 
 -- Lắng nghe gói UDP từ Server (Trong Game)
