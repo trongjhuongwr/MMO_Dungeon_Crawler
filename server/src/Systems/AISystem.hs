@@ -98,7 +98,7 @@ calculateBotAction dt currentTime botState humanState mapCenter =
 
           -- === 2c. Bắn (LOGIC BURST FIRE MỚI) ===
           
-          -- Chu kỳ: 3 giây bắn, 1 giây nghỉ (tổng 4 giây)
+          -- Tổng thời gian 1 đợt bắn (burst cycle) và thời gian bắn trong đợt đó
           burstCycleTime = 3.5
           burstFireDuration = 0.75
 
