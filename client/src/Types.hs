@@ -94,9 +94,9 @@ data AppState
 
 -- TRẠNG THÁI CLIENT TOÀN CỤC
 data ClientState = ClientState
-  { csTcpHandle  :: Handle     -- Kết nối TCP vĩnh viễn
-  , csUdpSocket  :: Socket     -- Socket UDP
-  , csServerAddr :: SockAddr   -- Địa chỉ UDP của server
+  { csTcpHandle  :: Maybe Handle     -- Kết nối TCP vĩnh viễn
+  , csUdpSocket  :: Maybe Socket     -- Socket UDP
+  , csServerAddr :: Maybe SockAddr   -- Địa chỉ UDP của server
   , csMyId       :: Int        -- ID của mình (lấy sau khi login)
   , csUsername   :: String
   , csState      :: AppState

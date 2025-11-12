@@ -68,6 +68,7 @@ renderMenu username (w, h) = Pictures
   , Color white $ drawButton (0, 0) "  PvP"
   , Color (greyN 0.5) $ drawButton (0, -60) "  PvE"
   , Color (greyN 0.5) $ drawButton (0, -120) "2PvE (Disabled)"
+  , Color white $ drawButton (0, -180) " Logout"
   ]
 
 renderRoomSelection :: RoomSelectionData -> (Float, Float) -> Picture
