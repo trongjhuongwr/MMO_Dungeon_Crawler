@@ -194,10 +194,6 @@ handleClient sock addr serverStateRef = do
 processPacket :: Connection -> Maybe Int -> Handle -> ClientTcpPacket -> ServerState -> MVar ServerState -> IO (ServerState, (Maybe Int, [IO ()]))
 processPacket dbConn mPid h pkt sState serverStateRef =
   case (pkt, mPid) of
-    
-    -- ================================================================
-    -- TRẠNG THÁI: CHƯA ĐĂNG NHẬP (mPid is Nothing)
-    -- ================================================================
 
     -- === XỬ LÝ ĐĂNG KÝ ===
     (CTP_Register user pass, Nothing) -> do
@@ -243,10 +239,6 @@ processPacket dbConn mPid h pkt sState serverStateRef =
           -- Trả về (Just pid) để cập nhật state của vòng lặp
           pure (newState, (Just pid, [action]))
 
-    -- ================================================================
-    -- TRẠNG THÁI: ĐÃ ĐĂNG NHẬP (mPid is Just pid)
-    -- ==================================================================
-
     (CTP_CreateRoom, Just pid) -> do
       newRoomId <- generateRoomId
       let client = ssClients sState Map.! pid
@@ -260,13 +252,25 @@ processPacket dbConn mPid h pkt sState serverStateRef =
         Nothing -> do
           let action = sendTcpPacket h (STP_Kicked "Room not found")
           pure (sState, (Just pid, [action]))
-        Just room -> do
-          let client = ssClients sState Map.! pid
-          let newPlayers = Map.insert pid client (roomPlayers room)
-          let updatedRoom = room { roomPlayers = newPlayers }
-          let newRooms = Map.insert roomId updatedRoom (ssRooms sState)
-          let actions = broadcastRoomUpdate updatedRoom -- Lấy list [IO ()]
-          pure (sState { ssRooms = newRooms }, (Just pid, actions))
+        
+        Just room ->
+          -- Dùng if-then-else lồng nhau (chuẩn Haskell 2010)
+          if Map.size (roomPlayers room) >= 2
+            then do
+              let action = sendTcpPacket h (STP_Kicked "Room is full")
+              pure (sState, (Just pid, [action]))
+            else if isJust (roomGame room)
+              then do
+                let action = sendTcpPacket h (STP_Kicked "Game already in progress")
+                pure (sState, (Just pid, [action]))
+              else do
+                -- Logic cũ (bây giờ đã an toàn)
+                let client = ssClients sState Map.! pid
+                let newPlayers = Map.insert pid client (roomPlayers room)
+                let updatedRoom = room { roomPlayers = newPlayers }
+                let newRooms = Map.insert roomId updatedRoom (ssRooms sState)
+                let actions = broadcastRoomUpdate updatedRoom
+                pure (sState { ssRooms = newRooms }, (Just pid, actions))
       
     (CTP_StartPvEBotMatch myTank botTank, Just pid) -> do
       putStrLn $ "[TCP] Client " ++ show pid ++ " starting PvE Bot Match."
