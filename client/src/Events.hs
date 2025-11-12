@@ -242,10 +242,7 @@ handleInputGame :: Event -> InGameState -> InGameState
 handleInputGame event gdata =
   case event of
     EventKey (MouseButton LeftButton) Down _ _ ->
-      gdata { igsDidFire = True
-            , igsTurretAnimRapid = startAnimation (igsTurretAnimRapid gdata)
-            , igsTurretAnimBlast = startAnimation (igsTurretAnimBlast gdata)
-            }
+      gdata { igsDidFire = True}
     EventKey key Down _ _ ->
       let newKeys = Set.insert key (igsKeys gdata)
       in gdata { igsKeys = newKeys }
