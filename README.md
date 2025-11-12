@@ -75,7 +75,6 @@ Máy khách được thiết kế theo mô hình **Máy khách mỏng (Thin Clie
 ```
 MMO_Dungeon_Crawler/
 ├── client/
-│   ├── app/            (Không dùng, Main.hs nằm trong src)
 │   ├── assets/         (Tài nguyên đồ họa, bản đồ, âm thanh)
 │   │   ├── maps/       (*.json)
 │   │   └── textures/   (*.png)
