@@ -47,6 +47,9 @@ main = withSocketsDo $ do
     Right assets -> do 
       putStrLn "Assets loaded."
       
+      let initialWindowSizeInt = (800, 600)
+      let initialWindowSizeFloat = (fromIntegral $ fst initialWindowSizeInt, fromIntegral $ snd initialWindowSizeInt)
+
       eConn <- try $ connectTcp 
         (server_host config) 
         (fromIntegral $ server_tcp_port config) 
@@ -65,6 +68,7 @@ main = withSocketsDo $ do
                 , csUsername = ""
                 , csState = S_Login (LoginData "" "" "Please login" UserField)
                 , csResources = assets
+                , csWindowSize = initialWindowSizeFloat
                 }
           
           clientStateRef <- newMVar initialState
@@ -73,7 +77,7 @@ main = withSocketsDo $ do
           _ <- forkIO $ udpListenLoop sockUDP clientStateRef
           
           playIO
-            (InWindow "MMO Dungeon Crawler" (800, 600) (10, 10))
+            (InWindow "MMO Dungeon Crawler" initialWindowSizeInt (10, 10))
             black 60
             clientStateRef
             renderIO
@@ -88,18 +92,23 @@ main = withSocketsDo $ do
 renderIO :: MVar ClientState -> IO Picture
 renderIO mvar = do
   cState <- readMVar mvar
+  let windowSize = csWindowSize cState -- <<< LẤY KÍCH THƯỚC TỪ STATE
+  
   case (csState cState) of
-    S_Login loginData -> pure $ renderLogin loginData
-    S_Menu -> pure $ renderMenu (csUsername cState)
-    S_RoomSelection rsd -> pure $ renderRoomSelection rsd
-    S_Lobby (LobbyData rId pInfo myTank myReady) -> pure $ renderLobby rId pInfo (csMyId cState) myTank myReady
-    S_PvEBotLobby data_ -> pure $ renderPvEBotLobby data_
+    S_Login loginData -> pure $ renderLogin loginData windowSize -- <<< TRUYỀN VÀO
+    S_Menu -> pure $ renderMenu (csUsername cState) windowSize -- <<< TRUYỀN VÀO
+    S_RoomSelection rsd -> pure $ renderRoomSelection rsd windowSize -- <<< TRUYỀN VÀO
+    S_Lobby (LobbyData rId pInfo myTank myReady) -> pure $ renderLobby rId pInfo (csMyId cState) myTank myReady windowSize -- <<< TRUYỀN VÀO
+    S_PvEBotLobby data_ -> pure $ renderPvEBotLobby data_ windowSize -- <<< TRUYỀN VÀO
+    
     S_InGame gdata -> 
       pure $ render (csResources cState) (igsGameMap gdata) (igsWorld gdata) 
                     (igsEffects gdata) (igsTurretAnimRapid gdata) 
                     (igsTurretAnimBlast gdata) (Just $ igsMyId gdata) 
                     (igsMatchState gdata)
-    S_PostGame pgData -> pure $ renderPostGame pgData (csMyId cState)
+                    windowSize -- <<< TRUYỀN VÀO
+                    
+    S_PostGame pgData -> pure $ renderPostGame pgData (csMyId cState) windowSize -- <<< TRUYỀN VÀO
 
     S_Paused gdata isConfirming -> do
       -- 1. Vẽ lại game state y như cũ
@@ -107,8 +116,12 @@ renderIO mvar = do
                            (igsEffects gdata) (igsTurretAnimRapid gdata) 
                            (igsTurretAnimBlast gdata) (Just $ igsMyId gdata) 
                            (igsMatchState gdata)
-      -- 2. Vẽ lớp phủ làm mờ
-      let dimOverlay = Color (makeColor 0 0 0 0.5) $ rectangleSolid 800 600
+                           windowSize -- <<< TRUYỀN VÀO
+      
+      -- 2. Vẽ lớp phủ làm mờ (dựa trên kích thước)
+      let (w, h) = windowSize
+      let dimOverlay = Color (makeColor 0 0 0 0.5) $ rectangleSolid w h -- <<< SỬ DỤNG
+      
       -- 3. Vẽ menu
       let menuPic = renderPauseMenu isConfirming
       

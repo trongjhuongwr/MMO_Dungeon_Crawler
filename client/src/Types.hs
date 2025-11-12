@@ -101,6 +101,7 @@ data ClientState = ClientState
   , csUsername   :: String
   , csState      :: AppState
   , csResources  :: Resources
+  , csWindowSize :: (Float, Float)
   }
 
 data RoomSelectionData = RoomSelectionData 

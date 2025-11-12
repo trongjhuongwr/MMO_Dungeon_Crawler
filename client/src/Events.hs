@@ -17,35 +17,48 @@ import Types.GameMode (GameMode(..))
 -- INPUT CHÍNH (Router)
 handleInputIO :: Event -> MVar ClientState -> IO (MVar ClientState)
 handleInputIO event mvar = do
-  modifyMVar_ mvar $ \cState -> do
-    case (csState cState) of
-      S_Login data_ -> handleInputLogin event cState
-      S_Menu        -> handleInputMenu event cState
-      S_RoomSelection data_ -> handleInputRoomSelection event cState
-      S_Lobby data_   -> handleInputLobby event cState
-      S_PvEBotLobby data_ -> handleInputPvEBotLobby event cState
-      S_InGame gdata  -> 
-        case event of
-          -- <--- LOGIC BẮT PHÍM ESC Ở ĐÂY
-          (EventKey (SpecialKey KeyEsc) Down _ _) ->
-            if (igsMode gdata == PvE) -- Chỉ cho phép pause PvE
-            then do
-              putStrLn "[Input] Pausing PvE game"
-              sendTcpPacket (csTcpHandle cState) (CTP_PauseGame True)
-              pure cState { csState = S_Paused gdata False } -- Chuyển sang state Paused
-            else 
-              pure cState -- Không làm gì ở PvP
-          
-          -- Xử lý input game bình thường
-          _ -> if (igsMatchState gdata == InProgress)
-                 then pure $ cState { csState = S_InGame (handleInputGame event gdata) }
-                 else case (igsMatchState gdata) of
-                        (GameOver _) -> handleInputPostGame event cState
-                        _ -> pure cState 
+  modifyMVar_ mvar $ \cState ->
+    
+    -- Bước 1: Xử lý các sự kiện toàn cục (như Resize) trước
+    case event of
+      (EventResize (w, h)) -> do
+        putStrLn $ "[Input] Window Resized: " ++ show (w, h)
+        pure $ cState { csWindowSize = (fromIntegral w, fromIntegral h) }
       
-      S_PostGame data_ -> handleInputPostGame event cState
-      S_Paused gdata isConfirming -> handleInputPaused event cState
+      -- Bước 2: Chuyển sang các xử lý theo state cho các event khác
+      _ -> handleStateSpecificInput event cState
+      
   return mvar
+
+handleStateSpecificInput :: Event -> ClientState -> IO ClientState
+handleStateSpecificInput event cState =
+  case (csState cState) of
+    S_Login data_ -> handleInputLogin event cState
+    S_Menu        -> handleInputMenu event cState
+    S_RoomSelection data_ -> handleInputRoomSelection event cState
+    S_Lobby data_   -> handleInputLobby event cState
+    S_PvEBotLobby data_ -> handleInputPvEBotLobby event cState
+    S_InGame gdata  -> 
+      case event of
+        -- <--- LOGIC BẮT PHÍM ESC Ở ĐÂY
+        (EventKey (SpecialKey KeyEsc) Down _ _) ->
+          if (igsMode gdata == PvE) -- Chỉ cho phép pause PvE
+          then do
+            putStrLn "[Input] Pausing PvE game"
+            sendTcpPacket (csTcpHandle cState) (CTP_PauseGame True)
+            pure cState { csState = S_Paused gdata False } -- Chuyển sang state Paused
+          else 
+            pure cState -- Không làm gì ở PvP
+        
+        -- Xử lý input game bình thường
+        _ -> if (igsMatchState gdata == InProgress)
+               then pure $ cState { csState = S_InGame (handleInputGame event gdata) }
+               else case (igsMatchState gdata) of
+                      (GameOver _) -> handleInputPostGame event cState
+                      _ -> pure cState 
+    
+    S_PostGame data_ -> handleInputPostGame event cState
+    S_Paused gdata isConfirming -> handleInputPaused event cState
 
 -- === LOGIN ===
 handleInputLogin :: Event -> ClientState -> IO ClientState

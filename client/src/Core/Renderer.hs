@@ -55,8 +55,9 @@ render :: Resources
        -> Animation -- ^ animBlast
        -> Maybe Int -- ^ mMyId
        -> MatchState 
+       -> (Float, Float)
        -> Picture
-render assets gameMap snapshot effects animRapid animBlast mMyId matchState =
+render assets gameMap snapshot effects animRapid animBlast mMyId matchState (w, h) =
   let
     (ourPlayer, otherPlayers) = 
       case mMyId of
@@ -69,7 +70,7 @@ render assets gameMap snapshot effects animRapid animBlast mMyId matchState =
     mapPic = drawMap assets gameMap
     
     hudPic = case (ourPlayer, matchState) of
-               (Just p, InProgress) -> renderHUD assets p
+               (Just p, InProgress) -> renderHUD assets p (w, h)
                _ -> Blank
                
     ourPlayerPic = case ourPlayer of
@@ -86,7 +87,7 @@ render assets gameMap snapshot effects animRapid animBlast mMyId matchState =
     -- === THÊM KHỐI NÀY ===
     radarPic =
       case (ourPlayer, matchState) of
-        (Just p, InProgress) -> renderRadar assets p otherPlayers
+        (Just p, InProgress) -> renderRadar assets p otherPlayers (w, h)
         _                    -> Blank
     -- === KẾT THÚC THÊM MỚI ===
 
@@ -110,7 +111,7 @@ render assets gameMap snapshot effects animRapid animBlast mMyId matchState =
     visionLayer =
       Translate camX camY $
       Rotate (radToDeg playerTurretAngle) $
-      Scale 1.2 1.2 (resVignetteMask assets)
+      Scale 1 1 (resVignetteMask assets)
     
     -- *** ĐÂY LÀ PHẦN ĐÃ SỬA LỖI CÚ PHÁP ***
     uiOverlay = case matchState of

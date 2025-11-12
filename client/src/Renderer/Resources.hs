@@ -114,7 +114,7 @@ loadResources = do
 
   -- Load Common FX
   eExplosionImg <- readImage (Settings.projectile "explosion_spritesheet_blast.png")
-  mVignette <- loadJuicyPNG (Settings.ui "vignette_mask_01.png")
+  mVignette <- loadJuicyPNG (Settings.ui "vignette_mask_02.png")
   mRadar    <- loadJuicyPNG (Settings.ui "radar.png")
 
   -- Tải 4 khung hình 'lives'
