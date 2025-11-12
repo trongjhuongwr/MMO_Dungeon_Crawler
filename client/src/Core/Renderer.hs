@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Redundant bracket" #-}
 module Core.Renderer (render) where 
 
 import Graphics.Gloss
@@ -13,7 +15,7 @@ import Core.Effect (Effect(..))
 import Core.Animation (Animation, getCurrentFrame) 
 import qualified Data.Map as Map 
 import qualified Data.Array as Array 
-import UI.HUD (renderHUD) 
+import UI.HUD (renderHUD, renderRadar) 
 import Data.Maybe (maybe, Maybe(..)) 
 import qualified Data.List as List 
 import Data.Ord (comparing) 
@@ -80,7 +82,14 @@ render assets gameMap snapshot effects animRapid animBlast mMyId matchState =
                      Nothing -> []
     
     otherPlayerPics = map (drawOtherPlayer assets) otherPlayers
-        
+
+    -- === THÊM KHỐI NÀY ===
+    radarPic =
+      case (ourPlayer, matchState) of
+        (Just p, InProgress) -> renderRadar assets p otherPlayers
+        _                    -> Blank
+    -- === KẾT THÚC THÊM MỚI ===
+
     (camX, camY) = case ourPlayer of
                      Just p  -> (vecX $ psPosition p, vecY $ psPosition p)
                      Nothing -> (0, 0)
@@ -129,6 +138,7 @@ render assets gameMap snapshot effects animRapid animBlast mMyId matchState =
         Pictures
           [ Translate (-camX) (-camY) worldLayer
           , hudPic
+          , radarPic
           , uiOverlay
           ]
   
@@ -161,6 +171,9 @@ drawOtherPlayer assets ps =
       Tank.Blast -> (resTankBodyBlast assets, head $ resTurretFramesBlast assets)
       
     tankScale = 0.5
+
+    healthBarPic = Translate 0 25 $ drawWorldHealthBar (psHealth ps)
+    
   in
     Translate x y $ Pictures
       [ 
@@ -168,6 +181,7 @@ drawOtherPlayer assets ps =
           Scale tankScale tankScale bodyPic
       , Rotate (radToDeg $ psTurretAngle ps) $
           Scale tankScale tankScale turretPic
+      , healthBarPic
       ]
 
 
@@ -192,6 +206,29 @@ drawEffect _ effect =
     frame = getCurrentFrame (effAnimation effect)
   in
     Translate x y $ Color white (Scale 0.25 0.25 frame)
+
+-- Vẽ thanh máu nhỏ trong thế giới game
+drawWorldHealthBar :: Int -> Picture
+drawWorldHealthBar currentHP =
+  let
+    barWidth = 30.0 -- Kích thước nhỏ, gắn với xe tăng
+    barHeight = 5.0
+    maxHealth = 100.0 -- Phải là Float để tính tỉ lệ
+
+    healthRatio = (fromIntegral currentHP) / maxHealth
+    currentWidth = barWidth * (max 0 (min 1 healthRatio))
+
+    -- Màu xanh lá cây cho máu
+    healthPic = Color green $ rectangleSolid currentWidth barHeight
+    -- Màu đỏ sẫm cho nền
+    backgroundPic = Color (dark red) $ rectangleSolid barWidth barHeight
+  in
+    Pictures
+      [ -- Vẽ nền trước
+        Translate (barWidth / 2) 0 backgroundPic
+        -- Vẽ máu đè lên, căn lề trái
+      , Translate (currentWidth / 2) 0 healthPic
+      ]
 
 radToDeg :: Float -> Float
 radToDeg r = r * 180 / pi

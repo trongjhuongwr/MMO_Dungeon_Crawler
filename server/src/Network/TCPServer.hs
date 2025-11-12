@@ -8,7 +8,7 @@
 module Network.TCPServer (startTcpServer) where
 
 import Control.Monad (forever, when, void)
-import Control.Concurrent (forkIO, MVar, modifyMVar, readMVar, newMVar, modifyMVar_)
+import Control.Concurrent (forkIO, MVar, modifyMVar, readMVar, newMVar, modifyMVar_, tryReadMVar)
 import Network.Socket
 import System.IO
 import qualified Data.Map as Map
@@ -416,31 +416,49 @@ processPacket dbConn mPid h pkt sState serverStateRef =
       let (mRoom, mRoomId) = findRoomByPlayerId pid sState
       let actionToClient = sendTcpPacket h STP_ShowMenu -- Gửi client về menu
       
-      -- === FIX DEADLOCK (2/3) ===
-      -- B1: Lấy MVar
       let mGameMVar = mRoom >>= roomGame
       
-      -- B2: Tạo action
-      let unpauseAction = case mGameMVar of
-            Just gameMVar -> [modifyMVar_ gameMVar (\rgs -> pure rgs { rgsIsPaused = False })]
-            Nothing -> []
+      -- 1. Kiểm tra xem game đã kết thúc CHƯA (bằng cách 'tryReadMVar')
+      --    Chúng ta dùng 'tryReadMVar' để tránh bị block nếu GameLoop đang giữ MVar
+      isGameOver <- case mGameMVar of
+            Nothing -> pure False -- Không có game, không thể "game over"
+            Just gameMVar -> do
+              mRgs <- tryReadMVar gameMVar -- Đọc không block
+              case mRgs of
+                Nothing -> pure False -- GameLoop đang chạy, giả sử game chưa 'over'
+                Just rgs -> 
+                  case rgsMatchState rgs of
+                    GameOver _ -> pure True  -- Game đã kết thúc
+                    _          -> pure False -- Game đang chạy hoặc chờ
+      
+      -- 2. Tạo action unpause (chỉ khi game chưa 'over')
+      let unpauseAction = case (mGameMVar, isGameOver) of
+            (Just gameMVar, False) -> -- Chỉ unpause nếu game đang chạy
+              [modifyMVar_ gameMVar (\rgs -> pure rgs { rgsIsPaused = False })]
+            _ -> [] -- Không unpause nếu game đã 'over' hoặc không có game
 
-      -- B3: Cập nhật S-lock (state của server)
+      -- 3. Cập nhật S-lock (state của server)
       case (mRoom, mRoomId) of
         (Just room, Just roomId) -> do
           let newPlayers = Map.delete pid (roomPlayers room)
-          let updatedRoom = room { roomPlayers = newPlayers, roomRematchRequests = Set.empty }
+
+          -- QUAN TRỌNG: Nếu game đã kết thúc, reset roomGame về Nothing
+          let roomToSave = if isGameOver
+                             then room { roomPlayers = newPlayers, roomRematchRequests = Set.empty, roomGame = Nothing }
+                             else room { roomPlayers = newPlayers, roomRematchRequests = Set.empty }
 
           if Map.null newPlayers
             then do
+              -- Phòng rỗng, xóa phòng (logic này đã đúng)
               putStrLn $ "[TCP] Room " ++ roomId ++ " is empty. Deleting."
               let newState = sState { ssRooms = Map.delete roomId (ssRooms sState) }
-              pure (newState, (Just pid, unpauseAction ++ [actionToClient])) -- Chạy unpause
+              pure (newState, (Just pid, unpauseAction ++ [actionToClient]))
             else do
-              let newRooms = Map.insert roomId updatedRoom (ssRooms sState)
+              -- Phòng còn người, cập nhật phòng
+              let newRooms = Map.insert roomId roomToSave (ssRooms sState) -- Dùng 'roomToSave'
               let newState = sState { ssRooms = newRooms }
-              let roomUpdateActions = broadcastRoomUpdate updatedRoom
-              let rematchClearActions = broadcastToRoom updatedRoom (STP_RematchUpdate [])
+              let roomUpdateActions = broadcastRoomUpdate roomToSave -- Dùng 'roomToSave'
+              let rematchClearActions = broadcastToRoom roomToSave (STP_RematchUpdate [])
               let actions = [actionToClient] ++ roomUpdateActions ++ unpauseAction ++ rematchClearActions
               pure (newState, (Just pid, actions))
         _ -> pure (sState, (Just pid, [actionToClient])) -- Không ở trong phòng
@@ -462,7 +480,11 @@ processPacket dbConn mPid h pkt sState serverStateRef =
             then do
               putStrLn $ "[TCP] Room " ++ roomId ++ " is starting a rematch!"
               
-              -- B2: Tạo action
+              -- B2: Lấy GameMode HIỆN TẠI từ MVar (An toàn vì mode không thay đổi)
+              rgs_peek <- readMVar gameMVar
+              let currentGameMode = rgsMode rgs_peek -- <--- Lấy mode hiện tại (PvP hoặc PvE)
+
+              -- Tạo action reset game (giữ nguyên)
               let resetGameAction = modifyMVar_ gameMVar $ \rgs -> do
                     let getSpawnPos pId spawns = if null spawns
                                                   then Vec2 100 100
@@ -480,7 +502,9 @@ processPacket dbConn mPid h pkt sState serverStateRef =
               -- B3: Cập nhật S-lock
               let finalRoom = updatedRoom { roomRematchRequests = Set.empty }
               let finalRooms = Map.insert roomId finalRoom (ssRooms sState)
-              let broadcastActions = broadcastToRoom finalRoom (STP_GameStarting PvP)
+              
+              -- SỬA LỖI: Gửi đúng GameMode đã lấy
+              let broadcastActions = broadcastToRoom finalRoom (STP_GameStarting currentGameMode) -- <--- ĐÃ SỬA
               
               pure (sState { ssRooms = finalRooms }, (Just pid, resetGameAction : broadcastActions))
               

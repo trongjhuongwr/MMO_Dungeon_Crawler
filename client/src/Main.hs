@@ -14,14 +14,17 @@ import UI.Screens
 import Types.MatchState (MatchState(..)) 
 import Data.Maybe (Maybe(..)) 
 import Config (ClientConfig(..), loadConfig)
+import Data.List (find)
 
 -- Imports các module đã tách
 import Types
 import Game
 import Network.Client
 import Events
-import Network.Packet (ClientUdpPacket(..))
+import Network.Packet (ClientUdpPacket(..), WorldSnapshot(..))
 import qualified Data.Set as Set
+import Types.Player (PlayerState(..))
+import qualified Types.Tank as Tank
 
 -- ===================================================================
 -- HÀM MAIN VÀ KHỞI TẠO
@@ -123,12 +126,21 @@ updateClientIO dt mvar = do
         let (gdata', mCmd) = updateGame dt gdata -- <-- Từ Game.hs
         in case (igsMatchState gdata') of
             GameOver mWinnerId ->
-              let status = case (Just (igsMyId gdata'), mWinnerId) of
+              let 
+                -- Ràng buộc 1: Xác định status
+                status = case (Just (igsMyId gdata'), mWinnerId) of
                             (Just myId, Just winnerId) | myId == winnerId -> "YOU WIN!"
                             (Just _, Nothing) -> "DRAW!"
                             _ -> "YOU LOSE!"
-              -- Chuyển sang PostGame VÀ trả ra command (cho frame cuối cùng)
-              in pure (cState { csState = S_PostGame (PostGameData status Set.empty) }, mCmd)
+                
+                -- Ràng buộc 2: Tìm state của người chơi (Sửa lỗi từ lượt trước)
+                myPlayerState = find (\p -> psId p == igsMyId gdata') (wsPlayers $ igsWorld gdata')
+                
+                -- Ràng buộc 3: Lấy tank (Sửa lỗi từ lượt trước)
+                myLastTank = maybe Tank.Rapid psTankType myPlayerState
+
+              -- 'in' chỉ xuất hiện một lần ở cuối
+              in pure (cState { csState = S_PostGame (PostGameData status Set.empty myLastTank) }, mCmd)
             _ -> 
               -- Cập nhật InGame VÀ trả ra command
               pure (cState { csState = S_InGame gdata' }, mCmd)

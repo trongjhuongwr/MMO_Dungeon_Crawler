@@ -1,4 +1,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use guards" #-}
+{-# HLINT ignore "Redundant bracket" #-}
+{-# HLINT ignore "Use find" #-}
 module Systems.AISystem (updateBotAI, botPlayerId) where
 
 import Core.Types
@@ -95,8 +99,8 @@ calculateBotAction dt currentTime botState humanState mapCenter =
           -- === 2c. Bắn (LOGIC BURST FIRE MỚI) ===
           
           -- Chu kỳ: 3 giây bắn, 1 giây nghỉ (tổng 4 giây)
-          burstCycleTime = 4.0
-          burstFireDuration = 2.5
+          burstCycleTime = 3.5
+          burstFireDuration = 0.75
 
           -- Tính toán thời gian trong chu kỳ hiện tại (dùng fmod)
           -- fmod yêu cầu Double, nên chúng ta cần chuyển đổi
