@@ -32,9 +32,9 @@ drawText (x, y) size text = Translate x y $ Scale size size $ Text text
 
 -- === CÁC MÀN HÌNH ===
 
-renderLogin :: LoginData -> Picture
-renderLogin (LoginData username password status activeField) = Pictures
-  [ Color black $ rectangleSolid 800 600   -- Background
+renderLogin :: LoginData -> (Float, Float) -> Picture
+renderLogin (LoginData username password status activeField) (w, h) = Pictures
+  [ Color black $ rectangleSolid w h   -- Background
   , Color white $ drawText (-80, 150) 0.3 "LOGIN"
 
   -- Username
@@ -60,19 +60,20 @@ renderLogin (LoginData username password status activeField) = Pictures
   , Color white $ drawText (-80, -200) 0.1 status
   ]
 
-renderMenu :: String -> Picture
-renderMenu username = Pictures
-  [ Color black $ rectangleSolid 800 600 
+renderMenu :: String -> (Float, Float) -> Picture
+renderMenu username (w, h) = Pictures
+  [ Color black $ rectangleSolid w h
   , Color (light cyan) $ drawText (-150, 200) 0.5 ("HELLO " ++ username)
   , Color white $ drawText (-100, 100) 0.4 "MAIN MENU"
   , Color white $ drawButton (0, 0) "  PvP"
   , Color (greyN 0.5) $ drawButton (0, -60) "  PvE"
   , Color (greyN 0.5) $ drawButton (0, -120) "2PvE (Disabled)"
+  , Color white $ drawButton (0, -180) " Logout"
   ]
 
-renderRoomSelection :: RoomSelectionData -> Picture
-renderRoomSelection rsd = Pictures
-  [ Color black $ rectangleSolid 800 600
+renderRoomSelection :: RoomSelectionData -> (Float, Float) -> Picture
+renderRoomSelection rsd (w, h) = Pictures
+  [ Color black $ rectangleSolid w h
   , Color white $ drawText (-150, 100) 0.3 "PVP LOBBY"
   , Color white $ drawButton (0, 0) "Create Room"
   , Color white $ drawButton (0, -60) "Join Room"
@@ -82,9 +83,9 @@ renderRoomSelection rsd = Pictures
   , Translate (-200) (-250) $ Scale 0.15 0.15 $ Color red $ Text (rsdError rsd)
   ]
 
-renderLobby :: String -> [PlayerInfo] -> Int -> Maybe TankType -> Bool -> Picture
-renderLobby roomId players myId myTank myReady = Pictures
-  [ Color black $ rectangleSolid 800 600   -- Background
+renderLobby :: String -> [PlayerInfo] -> Int -> Maybe TankType -> Bool -> (Float, Float) -> Picture
+renderLobby roomId players myId myTank myReady (w, h) = Pictures
+  [ Color black $ rectangleSolid w h   -- Background
   , Color white $ drawText (-350, 250) 0.2 ("Room ID: " ++ roomId)
   
   -- Thông tin người chơi
@@ -132,9 +133,9 @@ renderLobby roomId players myId myTank myReady = Pictures
         , Translate (x-80) (y-30) $ Scale 0.15 0.15 $ Color (if ready then green else red) $ Text (if ready then "Ready" else "Not Ready")
         ]
 
-renderPostGame :: PostGameData -> Int -> Picture
-renderPostGame (PostGameData status requesters _myLastTank) myId = Pictures
-  [ Color black $ rectangleSolid 800 600 -- Background
+renderPostGame :: PostGameData -> Int -> (Float, Float) -> Picture
+renderPostGame (PostGameData status requesters _myLastTank) myId (w, h) = Pictures
+  [ Color black $ rectangleSolid w h -- Background
   , Color white $ drawText (-100, 100) 0.5 status
   
   -- Logic cho nút Rematch
@@ -150,9 +151,9 @@ renderPostGame (PostGameData status requesters _myLastTank) myId = Pictures
   , Color white $ drawButton (0, -60) "Exit to Menu"
   ]
 
-renderPvEBotLobby :: PvEBotLobbyData -> Picture
-renderPvEBotLobby (PvEBotLobbyData myTank botTank) = Pictures
-  [ Color black $ rectangleSolid 800 600 -- Background
+renderPvEBotLobby :: PvEBotLobbyData -> (Float, Float) -> Picture
+renderPvEBotLobby (PvEBotLobbyData myTank botTank) (w, h) = Pictures
+  [ Color black $ rectangleSolid w h -- Background
   , Color white $ drawText (-200, 250) 0.3 "PVE BOT MATCH"
 
   -- Cột 1: Chọn Tank Của Bạn

@@ -47,6 +47,9 @@ main = withSocketsDo $ do
     Right assets -> do 
       putStrLn "Assets loaded."
       
+      let initialWindowSizeInt = (800, 600)
+      let initialWindowSizeFloat = (fromIntegral $ fst initialWindowSizeInt, fromIntegral $ snd initialWindowSizeInt)
+
       eConn <- try $ connectTcp 
         (server_host config) 
         (fromIntegral $ server_tcp_port config) 
@@ -56,24 +59,22 @@ main = withSocketsDo $ do
         Left (e :: SomeException) -> putStrLn $ "Cannot connect to server: " ++ show e
         Right (h, sockUDP, serverAddrUDP) -> do
           putStrLn "Connected to TCP/UDP."
-          
+          putStrLn "Client initialized. Waiting for login."
           let initialState = ClientState
-                { csTcpHandle = h
-                , csUdpSocket = sockUDP
-                , csServerAddr = serverAddrUDP
+                { csTcpHandle = Nothing
+                , csUdpSocket = Nothing
+                , csServerAddr = Nothing
                 , csMyId = 0 
                 , csUsername = ""
                 , csState = S_Login (LoginData "" "" "Please login" UserField)
                 , csResources = assets
+                , csWindowSize = initialWindowSizeFloat
                 }
           
-          clientStateRef <- newMVar initialState
-          
-          _ <- forkIO $ tcpListenLoop h clientStateRef
-          _ <- forkIO $ udpListenLoop sockUDP clientStateRef
+          clientStateRef <- newMVar initialState  
           
           playIO
-            (InWindow "MMO Dungeon Crawler" (800, 600) (10, 10))
+            (InWindow "MMO Dungeon Crawler" initialWindowSizeInt (10, 10))
             black 60
             clientStateRef
             renderIO
@@ -88,18 +89,23 @@ main = withSocketsDo $ do
 renderIO :: MVar ClientState -> IO Picture
 renderIO mvar = do
   cState <- readMVar mvar
+  let windowSize = csWindowSize cState -- <<< LẤY KÍCH THƯỚC TỪ STATE
+  
   case (csState cState) of
-    S_Login loginData -> pure $ renderLogin loginData
-    S_Menu -> pure $ renderMenu (csUsername cState)
-    S_RoomSelection rsd -> pure $ renderRoomSelection rsd
-    S_Lobby (LobbyData rId pInfo myTank myReady) -> pure $ renderLobby rId pInfo (csMyId cState) myTank myReady
-    S_PvEBotLobby data_ -> pure $ renderPvEBotLobby data_
+    S_Login loginData -> pure $ renderLogin loginData windowSize -- <<< TRUYỀN VÀO
+    S_Menu -> pure $ renderMenu (csUsername cState) windowSize -- <<< TRUYỀN VÀO
+    S_RoomSelection rsd -> pure $ renderRoomSelection rsd windowSize -- <<< TRUYỀN VÀO
+    S_Lobby (LobbyData rId pInfo myTank myReady) -> pure $ renderLobby rId pInfo (csMyId cState) myTank myReady windowSize -- <<< TRUYỀN VÀO
+    S_PvEBotLobby data_ -> pure $ renderPvEBotLobby data_ windowSize -- <<< TRUYỀN VÀO
+    
     S_InGame gdata -> 
       pure $ render (csResources cState) (igsGameMap gdata) (igsWorld gdata) 
                     (igsEffects gdata) (igsTurretAnimRapid gdata) 
                     (igsTurretAnimBlast gdata) (Just $ igsMyId gdata) 
                     (igsMatchState gdata)
-    S_PostGame pgData -> pure $ renderPostGame pgData (csMyId cState)
+                    windowSize -- <<< TRUYỀN VÀO
+                    
+    S_PostGame pgData -> pure $ renderPostGame pgData (csMyId cState) windowSize -- <<< TRUYỀN VÀO
 
     S_Paused gdata isConfirming -> do
       -- 1. Vẽ lại game state y như cũ
@@ -107,8 +113,12 @@ renderIO mvar = do
                            (igsEffects gdata) (igsTurretAnimRapid gdata) 
                            (igsTurretAnimBlast gdata) (Just $ igsMyId gdata) 
                            (igsMatchState gdata)
-      -- 2. Vẽ lớp phủ làm mờ
-      let dimOverlay = Color (makeColor 0 0 0 0.5) $ rectangleSolid 800 600
+                           windowSize -- <<< TRUYỀN VÀO
+      
+      -- 2. Vẽ lớp phủ làm mờ (dựa trên kích thước)
+      let (w, h) = windowSize
+      let dimOverlay = Color (makeColor 0 0 0 0.5) $ rectangleSolid w h -- <<< SỬ DỤNG
+      
       -- 3. Vẽ menu
       let menuPic = renderPauseMenu isConfirming
       
@@ -118,46 +128,35 @@ renderIO mvar = do
 updateClientIO :: Float -> MVar ClientState -> IO (MVar ClientState)
 updateClientIO dt mvar = do
 
-  -- === BƯỚC 1: Tách State Update và IO ===
-  -- Lấy ra mCommand (nếu có) và cập nhật state bên trong MVar
   mCommand <- modifyMVar mvar $ \cState -> do
-    case (csState cState) of
-      S_InGame gdata -> 
-        let (gdata', mCmd) = updateGame dt gdata -- <-- Từ Game.hs
-        in case (igsMatchState gdata') of
-            GameOver mWinnerId ->
-              let 
-                -- Ràng buộc 1: Xác định status
-                status = case (Just (igsMyId gdata'), mWinnerId) of
-                            (Just myId, Just winnerId) | myId == winnerId -> "YOU WIN!"
-                            (Just _, Nothing) -> "DRAW!"
-                            _ -> "YOU LOSE!"
-                
-                -- Ràng buộc 2: Tìm state của người chơi (Sửa lỗi từ lượt trước)
-                myPlayerState = find (\p -> psId p == igsMyId gdata') (wsPlayers $ igsWorld gdata')
-                
-                -- Ràng buộc 3: Lấy tank (Sửa lỗi từ lượt trước)
-                myLastTank = maybe Tank.Rapid psTankType myPlayerState
+    -- Tách logic cập nhật state và lấy command
+    let (newState, mCmd) = case (csState cState) of
+          S_InGame gdata -> 
+            let (gdata', mCmd) = updateGame dt gdata -- <-- Từ Game.hs
+            in case (igsMatchState gdata') of
+                GameOver mWinnerId ->
+                  let 
+                    status = case (Just (igsMyId gdata'), mWinnerId) of
+                                (Just myId, Just winnerId) | myId == winnerId -> "YOU WIN!"
+                                (Just _, Nothing) -> "DRAW!"
+                                _ -> "YOU LOSE!"
+                    myPlayerState = find (\p -> psId p == igsMyId gdata') (wsPlayers $ igsWorld gdata')
+                    myLastTank = maybe Tank.Rapid psTankType myPlayerState
+                  in (cState { csState = S_PostGame (PostGameData status Set.empty myLastTank) }, mCmd)
+                _ -> 
+                  (cState { csState = S_InGame gdata' }, mCmd)
+          
+          -- Các state khác không update game
+          _ -> (cState, Nothing)
+    
+    pure (newState, mCmd)
 
-              -- 'in' chỉ xuất hiện một lần ở cuối
-              in pure (cState { csState = S_PostGame (PostGameData status Set.empty myLastTank) }, mCmd)
-            _ -> 
-              -- Cập nhật InGame VÀ trả ra command
-              pure (cState { csState = S_InGame gdata' }, mCmd)
-      
-      -- Khi Pause, không update game, không gửi packet UDP
-      S_Paused _ _ -> pure (cState, Nothing)
-      
-      _ -> pure (cState, Nothing)
-
-  -- === BƯỚC 2: Thực hiện IO (gửi packet) BÊN NGOÀI MVar ===
-  -- Đọc lại state (chỉ đọc, không khóa) để lấy thông tin socket
-  cState <- readMVar mvar
-  case mCommand of
-    Just cmd -> 
-      sendUdpPacket (csUdpSocket cState) (csServerAddr cState) (CUP_Command cmd)
-    Nothing -> 
+  -- Thực hiện IO (gửi packet) BÊN NGOÀI MVar
+  cState_after_update <- readMVar mvar
+  case (mCommand, csUdpSocket cState_after_update, csServerAddr cState_after_update) of
+    (Just cmd, Just sock, Just addr) -> -- <<< KIỂM TRA Just
+      sendUdpPacket (Just sock) (Just addr) (CUP_Command cmd)
+    _ -> 
       pure ()
   
-  -- Trả về MVar
   return mvar

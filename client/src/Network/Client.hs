@@ -14,10 +14,10 @@ module Network.Client
 
 import Network.Socket hiding (recv, SendTo, RecvFrom)
 import System.IO
-import Control.Exception (try, SomeException, catch)
+import Control.Exception (try, SomeException, catch, finally)
 import Data.Binary (encode, decode, decodeOrFail)
 import Control.Concurrent (MVar, newMVar, readMVar, modifyMVar_, modifyMVar, threadDelay)
-import Control.Monad (forever, when)
+import Control.Monad (forever, when, void)
 import qualified Data.ByteString.Lazy as LBS
 import qualified Network.Socket.ByteString as BS
 import Data.ByteString.Lazy.Internal (fromStrict, toStrict)
@@ -62,25 +62,36 @@ connectTcp host tcpPort udpPortString = do
   return (h, sockUDP, addrAddress serverAddrUDP)
 
 -- Hàm tiện ích gửi gói TCP
-sendTcpPacket :: Handle -> ClientTcpPacket -> IO ()
-sendTcpPacket h pkt = do
-  let lazyMsg = encode pkt
-  let strictMsg = toStrict lazyMsg
-  BS.hPut h strictMsg
-  hFlush h
+sendTcpPacket :: Maybe Handle -> ClientTcpPacket -> IO ()
+sendTcpPacket Nothing pkt = 
+  putStrLn $ "Warning: Tried to send TCP packet with no connection: " ++ show pkt
+sendTcpPacket (Just h) pkt = do
+  (do
+    let lazyMsg = encode pkt
+    let strictMsg = toStrict lazyMsg
+    BS.hPut h strictMsg
+    hFlush h
+    ) `catch` \(e :: SomeException) ->
+      putStrLn $ "[TCP] sendTcpPacket failed: " ++ show e
 
 -- Hàm tiện ích gửi gói UDP
-sendUdpPacket :: Socket -> SockAddr -> ClientUdpPacket -> IO ()
-sendUdpPacket sock addr pkt = do
+sendUdpPacket :: Maybe Socket -> Maybe SockAddr -> ClientUdpPacket -> IO ()
+sendUdpPacket (Just sock) (Just addr) pkt = do
   let lazyMsg = encode pkt
   _ <- BS.sendTo sock (toStrict lazyMsg) addr
   return ()
+sendUdpPacket _ _ pkt = 
+  putStrLn $ "Warning: Tried to send UDP packet with no connection: " ++ show pkt
 
 -- Lắng nghe gói TCP từ Server (Quản lý trạng thái)
 tcpListenLoop :: Handle -> MVar ClientState -> IO ()
-tcpListenLoop h mvar = loop LBS.empty
+tcpListenLoop h mvar = 
+  (loop LBS.empty) `catch` \(e :: SomeException) -> do
+    putStrLn $ "[TCP] Listener thread crashed: " ++ show e    
+    handleDisconnect
   where
-    -- Vòng lặp 'loop' chỉ ĐỌC từ socket và GỌI 'processBuffer'
+    -- Vòng lặp 'loop' chỉ ĐỌC từ socket và GỌI 'processBuffer'    
+    
     loop :: LBS.ByteString -> IO ()
     loop buffer = do
       strictChunk <- do
@@ -92,7 +103,7 @@ tcpListenLoop h mvar = loop LBS.empty
           Right bs -> pure bs
 
       if BS.null strictChunk && LBS.null buffer
-      then putStrLn "[TCP] Server disconnected." >> fail "Server disconnected"
+      then handleDisconnect
       else do
         let fullBuffer = buffer <> fromStrict strictChunk
         processBuffer fullBuffer -- Luôn gọi processBuffer với buffer MỚI
@@ -203,6 +214,24 @@ tcpListenLoop h mvar = loop LBS.empty
             else do
               putStrLn $ "[TCP] Processing " ++ show (LBS.length remaining) ++ " remaining bytes in buffer."
               processBuffer remaining -- Đệ quy 'processBuffer'
+
+    handleDisconnect :: IO ()
+    handleDisconnect = do
+      putStrLn "[TCP] Connection lost or closed. Resetting to Login screen."
+
+      void (try (hClose h) :: IO (Either SomeException ()))
+
+      -- Reset MVar về trạng thái ban đầu
+      modifyMVar_ mvar $ \cState ->
+        pure $ cState 
+          { csTcpHandle  = Nothing
+          , csUdpSocket  = Nothing
+          , csServerAddr = Nothing
+          , csMyId       = 0
+          , csUsername   = ""
+          , csState      = S_Login (LoginData "" "" "Disconnected" UserField)
+          }
+  
 
 -- Lắng nghe gói UDP từ Server (Trong Game)
 udpListenLoop :: Socket -> MVar ClientState -> IO ()

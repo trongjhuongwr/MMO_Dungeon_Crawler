@@ -7,19 +7,19 @@ import Types.Player (PlayerState(..))
 import Renderer.Resources (Resources(..))
 import Types.Common (Vec2(..))
 
--- Tọa độ góc trên trái của màn hình
-screenWidth, screenHeight :: Float
-screenWidth = 800.0
-screenHeight = 600.0
+-- -- Tọa độ góc trên trái của màn hình
+-- screenWidth, screenHeight :: Float
+-- screenWidth = 800.0
+-- screenHeight = 600.0
 
-topLeftX, topLeftY :: Float
-topLeftX = -(screenWidth / 2)
-topLeftY = screenHeight / 2
+-- topLeftX, topLeftY :: Float
+-- topLeftX = -(screenWidth / 2)
+-- topLeftY = screenHeight / 2
 
--- === THÊM KHỐI NÀY ===
-bottomRightX, bottomRightY :: Float
-bottomRightX = screenWidth / 2
-bottomRightY = -(screenHeight / 2)
+-- -- === THÊM KHỐI NÀY ===
+-- bottomRightX, bottomRightY :: Float
+-- bottomRightX = screenWidth / 2
+-- bottomRightY = -(screenHeight / 2)
 
 -- Cấu hình Radar
 radarScale :: Float
@@ -36,11 +36,14 @@ maxHealth = 100
 
 -- Thay đổi chữ ký hàm
 -- Hàm render chính cho HUD
-renderHUD :: Resources -> PlayerState -> Picture
-renderHUD assets player =
+renderHUD :: Resources -> PlayerState -> (Float, Float) -> Picture
+renderHUD assets player (w, h) = -- <<< THÊM (w, h)
   let
+    -- TÍNH TOÁN VỊ TRÍ MỚI DỰA TRÊN (w, h)
+    topLeftX = -(w / 2)
+    topLeftY = h / 2
+
     healthBar = drawHealthBar (psHealth player)
-    -- Gọi hàm vẽ mạng
     livesPic  = drawLives (resLifeIcons assets) (psLives player)
   in
     Pictures
@@ -90,15 +93,18 @@ drawLives lifeFrames lives =
     Scale 1 1 (lifeFrames !! frameIdx)
 
 -- HÀM MỚI: Vẽ Radar
-renderRadar :: Resources -> PlayerState -> [PlayerState] -> Picture
-renderRadar assets player opponents =
+renderRadar :: Resources -> PlayerState -> [PlayerState] -> (Float, Float) -> Picture
+renderRadar assets player opponents (w, h) = -- <<< THÊM (w, h)
   let
+    -- TÍNH TOÁN VỊ TRÍ MỚI DỰA TRÊN (w, h)
+    bottomRightX = w / 2
+    bottomRightY = -(h / 2)
+    
     scaledRadius = radarDisplayRadius * radarScale
     radarPadding = scaledRadius + 5.0
     radarX = bottomRightX - radarPadding
     radarY = bottomRightY + radarPadding
 
-    -- scale riêng cho background thôi
     radarBG = Scale radarScale radarScale (resRadar assets)
     playerDot = Color blue $ circleSolid 3.0
     opponentDots = map (drawOpponentDot player) opponents
