@@ -51,6 +51,7 @@ data InGameState = InGameState
   , igsMyId              :: Int
   , igsMatchState        :: MatchState
   , igsMode              :: GameMode
+  , igsLastFireTime      :: Float
   }
 
 -- Dữ liệu cho màn hình Login

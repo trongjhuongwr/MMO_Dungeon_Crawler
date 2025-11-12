@@ -171,6 +171,7 @@ tcpListenLoop h mvar = loop LBS.empty
                           , igsMyId = csMyId cState
                           , igsMatchState = InProgress
                           , igsMode = gameMode
+                          , igsLastFireTime = 0.0
                           }
                     
                     sendUdpPacket (csUdpSocket cState) (csServerAddr cState) (CUP_Handshake (csMyId cState))
