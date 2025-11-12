@@ -22,10 +22,14 @@ bottomRightX = screenWidth / 2
 bottomRightY = -(screenHeight / 2)
 
 -- Cấu hình Radar
-radarMaxRange, radarDisplayRadius :: Float
-radarMaxRange = 500.0 -- Phạm vi 500 đơn vị thế giới
-radarDisplayRadius = 70.0 -- Vẽ trong bán kính 70 pixel (ảnh radar là 150x150)
--- === KẾT THÚC THÊM MỚI ===
+radarScale :: Float
+radarScale = 2.0 -- <-- TỶ LỆ PHÓNG TO (Dùng 2.0 như bạn thử nghiệm)
+
+radarDisplayRadius :: Float
+radarDisplayRadius = 40-- <-- BÁN KÍNH GỐC CỦA ASSET (KHÔNG NHÂN SCALE)
+
+radarMaxRange :: Float
+radarMaxRange = 200 -- Tầm nhìn (World units)
 
 maxHealth :: Int
 maxHealth = 100
@@ -89,23 +93,18 @@ drawLives lifeFrames lives =
 renderRadar :: Resources -> PlayerState -> [PlayerState] -> Picture
 renderRadar assets player opponents =
   let
-    -- 1. Định vị Radar ở góc dưới-phải
-    --    (Ảnh 150x150, tâm 75x75. Đặt cách lề 80px)
-    radarX = bottomRightX - 80.0
-    radarY = bottomRightY + 80.0
+    scaledRadius = radarDisplayRadius * radarScale
+    radarPadding = scaledRadius + 5.0
+    radarX = bottomRightX - radarPadding
+    radarY = bottomRightY + radarPadding
 
-    -- 2. Lấy ảnh nền radar
-    radarBG = resRadar assets
-
-    -- 3. Chấm xanh của người chơi (luôn ở tâm)
+    -- scale riêng cho background thôi
+    radarBG = Scale radarScale radarScale (resRadar assets)
     playerDot = Color blue $ circleSolid 3.0
-
-    -- 4. Tính toán và vẽ các chấm đỏ của đối thủ
     opponentDots = map (drawOpponentDot player) opponents
-
   in
-    -- Gộp mọi thứ lại, dịch chuyển về góc
-    Translate radarX radarY $ Pictures (radarBG : playerDot : opponentDots)
+    Translate radarX radarY $
+    Pictures (radarBG : playerDot : opponentDots)
 
 
 -- HÀM HELPER: Tính toán và vẽ một chấm đỏ
@@ -116,26 +115,22 @@ drawOpponentDot player opp =
     deltaVec = psPosition opp - psPosition player -- Phép trừ Vec2
     (dx, dy) = (vecX deltaVec, vecY deltaVec)
 
-    -- 2. Xoay vector tương đối
-    --    Chúng ta muốn hướng "tiến" (psBodyAngle) của người chơi
-    --    luôn trỏ lên "phía trên" (trục Y+) của radar.
-    --    Góc xoay = (Góc "phía trên" - Góc "tiến" của player)
-    angle = (pi/2) - (psBodyAngle player) 
-
-    -- Áp dụng công thức xoay vector
-    rx = dx * (cos angle) - dy * (sin angle)
-    ry = dx * (sin angle) + dy * (cos angle)
+    -- 2. (Đã loại bỏ logic xoay)
 
     -- 3. Co dãn (Scale) từ World-space về Radar-space
+    --    TỰ ĐỘNG DÙNG CÁC GIÁ TRỊ MỚI:
+    --    scaleFactor = 140.0 / 350.0 (Lớn hơn trước)
     scaleFactor = radarDisplayRadius / radarMaxRange
-    scaledX = rx * scaleFactor
-    scaledY = ry * scaleFactor
+    scaledX = dx * scaleFactor
+    scaledY = dy * scaleFactor -- Y+ của map là Y+ của radar
 
-    -- 4. Kẹp (Clamp) vị trí vào mép radar nếu ở quá xa
+    -- 4. Kẹp (Clamp) vị trí vào mép radar
+    --    TỰ ĐỘNG DÙNG BÁN KÍNH MỚI:
+    --    dist > 140.0
     dist = sqrt (scaledX*scaledX + scaledY*scaledY)
     (finalX, finalY) = if dist > radarDisplayRadius && dist > 0
                        then (scaledX * radarDisplayRadius / dist, scaledY * radarDisplayRadius / dist)
                        else (scaledX, scaledY)
   in
-    -- Dịch chuyển chấm đỏ đến vị trí đã tính
+    -- Dịch chuyển chấm đỏ (KHÔNG bị scale bởi hàm renderRadar nữa)
     Translate finalX finalY (Color red (circleSolid 3.0))

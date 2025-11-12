@@ -12,7 +12,7 @@ import Types.Map (GameMap(..), TileType(..))
 import Types.Tank (TankType(..))
 import qualified Types.Tank as Tank
 import Core.Effect (Effect(..))
-import Core.Animation (Animation, getCurrentFrame) 
+import Core.Animation (Animation(..), getCurrentFrame) 
 import qualified Data.Map as Map 
 import qualified Data.Array as Array 
 import UI.HUD (renderHUD, renderRadar) 
