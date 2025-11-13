@@ -37,12 +37,12 @@ data TileType
   -- === Tường (Mặt trước) === 25-27
   | Wall_Front_00 | Wall_Front_01 | Wall_Front_02
 
-  -- === Tường (Cạnh trái) === 28-33
-  | Wall_Left_00 | Wall_Left_01 | Wall_Left_02 | Wall_Left_03
+  -- === Tường (Cạnh trái) === 28-31
+  | Wall_Left_01 | Wall_Left_02 
   | Wall_Left_End | Wall_Left_Start
 
-  -- === Tường (Cạnh phải) === 34-38
-  | Wall_Right_00 | Wall_Right_01 | Wall_Right_02
+  -- === Tường (Cạnh phải) === 32-35
+  | Wall_Right_01 | Wall_Right_02
   | Wall_Right_End | Wall_Right_Start
   
   deriving (Eq, Show, Enum, Bounded, Ord, Generic)
@@ -72,13 +72,10 @@ isSolid tt = case tt of
   Wall_Front_00  -> True
   Wall_Front_01  -> True
   Wall_Front_02  -> True
-  Wall_Left_00   -> True
   Wall_Left_01   -> True
   Wall_Left_02   -> True
-  Wall_Left_03   -> True
   Wall_Left_End  -> True
   Wall_Left_Start -> True
-  Wall_Right_00  -> True
   Wall_Right_01  -> True
   Wall_Right_02  -> True
   Wall_Right_End -> True
