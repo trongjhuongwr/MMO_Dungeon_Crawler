@@ -51,7 +51,7 @@ instance NFData TileType
 instance Serialize TileType
 instance Binary TileType
 
--- | Dữ liệu bản đồ game
+-- bản đồ game
 data GameMap = GameMap
   { gmapWidth  :: Int
   , gmapHeight :: Int
@@ -62,11 +62,10 @@ instance NFData GameMap
 instance Serialize GameMap
 instance Binary GameMap
 
--- | Hàm kiểm tra va chạm
+-- kiểm tra va chạm
 isSolid :: TileType -> Bool
 isSolid tt = case tt of
   Empty -> True 
-  -- Doors are traversable
   Wall_Back_00   -> True
   Wall_Back_01   -> True
   Wall_Front_00  -> True

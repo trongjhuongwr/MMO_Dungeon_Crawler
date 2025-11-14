@@ -20,45 +20,36 @@ import Data.Ord (comparing)
 import Types.Map (GameMap(..))
 import GHC.Float (float2Double, double2Float)
 
--- ID đặc biệt cho Bot
 botPlayerId :: Int
 botPlayerId = -1
 
--- Kích thước tile (để tính trung tâm map)
 serverTileSize :: Float
 serverTileSize = 32.0
 
--- | Hàm chính: được gọi mỗi tick trong GameLoop
 updateBotAI :: Float -> RoomGameState -> RoomGameState
 updateBotAI dt gs
-  | rgsMode gs /= PvE = gs -- Chỉ chạy ở chế độ PvE
+  | rgsMode gs /= PvE = gs 
   | otherwise =
       case (findBot gs, findHuman gs) of
         (Just (botFakeAddr, botState), Just (humanFakeAddr, humanState)) ->
           let
-            -- Tính toán trung tâm bản đồ
             gameMap = rgsMap gs
             GameMap { gmapWidth = gw, gmapHeight = gh } = gameMap
             mapCenter = Vec2 (fromIntegral gw * serverTileSize / 2.0)
                              (fromIntegral gh * serverTileSize / 2.0)
 
-            -- 1. Tính toán hành động (chỉ trả về Command)
             botCmd = calculateBotAction dt (rgsCurrentTime gs) botState humanState mapCenter
 
-            -- 2. "Tiêm" command vào danh sách
             newCommands = Command botFakeAddr botCmd : rgsCommands gs
             
           in
-            -- 3. Để CombatSystem xử lý việc cập nhật psLastFireTime
             gs { rgsCommands = newCommands }
             
-        _ -> gs -- Không tìm thấy bot hoặc người
+        _ -> gs 
 
--- | Tính toán hành động (trả về PlayerCommand)
 calculateBotAction :: Float -> Float -> PlayerState -> PlayerState -> Vec2 -> PlayerCommand
 calculateBotAction dt currentTime botState humanState mapCenter =
   let
-    -- --- 1. Tính toán mục tiêu ---
     targetVec = psPosition humanState - psPosition botState
     targetDist = vecLength targetVec
     
@@ -70,12 +61,10 @@ calculateBotAction dt currentTime botState humanState mapCenter =
 
   in
     if isEngaging
-      then -- === 2. LOGIC CHIẾN ĐẤU (Engaging) ===
+      then
         let
-          -- 2a. Nòng súng (Turret)
           turretAngle = atan2 (vecX targetVec) (vecY targetVec)
 
-          -- 2b. Thân xe (Body) - Di chuyển và giữ khoảng cách
           targetBodyAngle = turretAngle 
           currentBodyAngle = psBodyAngle botState
           
@@ -96,33 +85,25 @@ calculateBotAction dt currentTime botState humanState mapCenter =
           
           moveVec = Vec2 turn throttle
 
-          -- === 2c. Bắn (LOGIC BURST FIRE MỚI) ===
-          
-          -- Tổng thời gian 1 đợt bắn (burst cycle) và thời gian bắn trong đợt đó
           burstCycleTime = 3.5
           burstFireDuration = 0.75
 
-          -- Tính toán thời gian trong chu kỳ hiện tại (dùng fmod)
-          -- fmod yêu cầu Double, nên chúng ta cần chuyển đổi
           timeInCycle = double2Float $ snd $ properFraction (float2Double currentTime / float2Double burstCycleTime)
           isBurstFiring = (timeInCycle * burstCycleTime) < burstFireDuration
 
-          -- Kiểm tra cooldown vũ khí (như cũ)
           (cooldown, _) = getTankStats botState
           isWeaponReady = (currentTime - psLastFireTime botState) >= cooldown
           
-          -- Điều kiện bắn cuối cùng
           canFire = isEngaging && isBurstFiring && isWeaponReady
           
         in
           PlayerCommand moveVec turretAngle canFire
       
-      else -- === 3. LOGIC TUẦN TRA (Patrolling) ===
+      else 
         let
-          -- 3a. Nòng súng (Turret)
           turretAngle = psBodyAngle botState
 
-          -- 3b. Thân xe (Body) - Hướng về trung tâm + "lắc lư"
+          --  Hướng về trung tâm 
           vecToCenter = mapCenter - (psPosition botState)
           angleToCenter = atan2 (vecX vecToCenter) (vecY vecToCenter)
           randomPerturbation = sin (currentTime * 0.3) * (pi / 3.0) 
@@ -143,8 +124,7 @@ calculateBotAction dt currentTime botState humanState mapCenter =
           
           moveVec = Vec2 turn throttle
 
-          -- 3c. Bắn
-          canFire = False -- Không bắn khi tuần tra
+          canFire = False 
           
         in
           PlayerCommand moveVec turretAngle canFire
