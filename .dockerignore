@@ -1,0 +1,16 @@
+# Bỏ qua các tạo tác build của Stack
+.stack-work/
+
+# Bỏ qua Git
+.git/
+.gitignore
+
+# Bỏ qua các tệp tạm
+*.o
+*.hi
+*.hie
+*.swp
+.DS_Store
+
+# Bỏ qua file database (chúng ta sẽ dùng Volume)
+mmo_server.db
