@@ -8,6 +8,7 @@ module Core.Animation
 
 import Graphics.Gloss (Picture(Blank))
 
+-- Lưu trữ trạng thái của một animation.
 data Animation = Animation
   { animFrames       :: [Picture]
   , animFrameTime    :: Float
@@ -16,11 +17,13 @@ data Animation = Animation
   , animLoops        :: Bool
   }
 
+-- Reset một animation về frame đầu tiên nếu nó không lặp lại.
 startAnimation :: Animation -> Animation
 startAnimation anim
   | animLoops anim = anim
   | otherwise      = anim { animCurrentFrame = 0, animTimer = 0.0 }
 
+-- Cập nhật trạng thái của animation dựa trên thời gian đã trôi qua.
 updateAnimation :: Float -> Animation -> Animation
 updateAnimation dt anim
   | null frames = anim 
@@ -28,7 +31,7 @@ updateAnimation dt anim
   | otherwise =
       let
         newTimer = animTimer anim + dt
-        framesToAdvance = floor (newTimer / animFrameTime anim)
+        framesToAdvance = floor (newTimer / animFrameTime anim) -- Tính số frame cần nhảy qua
       in
         if framesToAdvance == 0
           then anim { animTimer = newTimer }
@@ -40,13 +43,14 @@ updateAnimation dt anim
                 | animLoops anim = newFrameRaw `mod` frameCount
                 | otherwise      = min frameCount newFrameRaw
               
-              finalTimer = newTimer - (fromIntegral framesToAdvance * animFrameTime anim)
+              finalTimer = newTimer - (fromIntegral framesToAdvance * animFrameTime anim) -- Tính lại timer, giữ lại phần dư
             in
               anim { animCurrentFrame = finalFrame, animTimer = finalTimer }
   where
     frames = animFrames anim
     frameCount = length frames
 
+-- Lấy ra ảnh của frame hiện tại để vẽ.
 getCurrentFrame :: Animation -> Picture
 getCurrentFrame anim
   | null frames = Blank
@@ -57,6 +61,7 @@ getCurrentFrame anim
     idx = animCurrentFrame anim
     frameCount = length frames
 
+-- Kiểm tra xem animation (không lặp) đã chạy xong hay chưa.
 isAnimationFinished :: Animation -> Bool
 isAnimationFinished anim =
   let
