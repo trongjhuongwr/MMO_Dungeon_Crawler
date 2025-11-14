@@ -67,14 +67,13 @@ gameLoop sock roomId roomStateRef serverStateRef = (forever $ do
       putMVar roomStateRef gs
       threadDelay tickInterval
     else do
-      -- 2. GAME KHÔNG PAUSE, CHẠY LOGIC
+      -- GAME KHÔNG PAUSE, CHẠY LOGIC
       let dt = fromIntegral tickInterval / 1000000.0
       
       -- Logic game chính
       (finalGameState, packetsToSend) <- case rgsMatchState gs of
         
         Waiting -> do
-          -- Logic này không nên chạy, TCPServer sẽ chuyển sang InProgress
           putStrLn $ "[GameLoop " ++ roomId ++ "] State was Waiting, forcing InProgress."
           pure (gs { rgsMatchState = InProgress }, [])
 
@@ -89,7 +88,7 @@ gameLoop sock roomId roomStateRef serverStateRef = (forever $ do
           let gs'''' = spawnNewBullets (rgsCurrentTime gs_with_time) gs'''
           let gs_filtered_entities = filterDeadEntities gs''''
           
-          -- [THAY ĐỔI] Gọi hàm IO mới để respawn
+          -- respawn
           gs_respawned <- respawnDeadPlayersIO gs_filtered_entities
           
           let (isGameOver, mWinnerId) = case rgsMode gs_respawned of
@@ -129,20 +128,19 @@ gameLoop sock roomId roomStateRef serverStateRef = (forever $ do
           let packet = SUP_MatchStateUpdate (GameOver winnerId)
           pure (gs, [(packet, Map.keys (rgsPlayers gs))])
       
-      -- 3. GỬI PACKETS (BÊN NGOÀI 'case')
+      -- GỬI PACKETS (BÊN NGOÀI 'case')
       sendPackets sock packetsToSend
       
-      -- 4. CẬP NHẬT STATE VÀ NGỦ
+      -- CẬP NHẬT STATE VÀ NGỦ
       let cleanGameState = finalGameState { rgsCommands = [] }
       putMVar roomStateRef cleanGameState
 
-      threadDelay tickInterval -- <-- HÀNH ĐỘNG CUỐI CÙNG CỦA 'else'
+      threadDelay tickInterval 
 
   ) `catch` \(e :: SomeException) -> do
     putStrLn $ "[GameLoop " ++ roomId ++ "] Loop exited."
     pure ()
 
-  -- === HÀM HELPER (ĐỊNH NGHĨA TRONG 'where') ===
   where
     -- Gửi gói tin
     sendPackets :: Socket -> [(ServerUdpPacket, [SockAddr])] -> IO ()
@@ -161,24 +159,18 @@ gameLoop sock roomId roomStateRef serverStateRef = (forever $ do
         putStrLn $ "[UDP] Failed to send packet to " ++ show addr ++ ": " ++ show e
         pure () -- Bỏ qua lỗi và tiếp tục
 
--- ================================================================
--- LOGIC RESPAWN NGẪU NHIÊN
--- ================================================================
--- | Hàm IO chính để respawn người chơi, thay thế cho hàm thuần túy cũ
+-- Hàm IO chính để respawn người chơi
 respawnDeadPlayersIO :: RoomGameState -> IO RoomGameState
 respawnDeadPlayersIO gs = do
-  -- Dùng traverseWithKey (tương đương mapM) để áp dụng hàm IO
   newPlayersMap <- Map.traverseWithKey (respawnPlayerIO gs) (rgsPlayers gs)
   pure $ gs { rgsPlayers = newPlayersMap }
 
--- [THÊM MỚI]
--- | Logic respawn IO cho từng người chơi
+-- Logic respawn IO cho từng người chơi
 respawnPlayerIO :: RoomGameState -> SockAddr -> PlayerState -> IO PlayerState
 respawnPlayerIO gs addr p = do
   if psHealth p <= 0 && psLives p > 0
     then do
-      -- 1. Tìm một đối thủ (bất kỳ ai không phải 'p')
-      -- Logic này hoạt động cho cả PvP (tìm người kia) và PvE (người tìm bot / bot tìm người)
+      -- Tìm một đối thủ
       let mOpponent = listToMaybe $ Map.elems $ Map.delete addr (rgsPlayers gs)
       
       newPos <- case mOpponent of
@@ -192,46 +184,41 @@ respawnPlayerIO gs addr p = do
           pure fallbackPos
         
         Just opponent -> do
-          -- 2. Tìm vị trí hồi sinh hợp lệ, cách xa đối thủ
+          -- Tìm vị trí hồi sinh hợp lệ, cách xa đối thủ
           -- Thử 10 lần, nếu không được sẽ dùng fallback
           findValidRespawnPos (rgsMap gs) (psPosition opponent) 10
 
-      -- 3. Hồi sinh người chơi
+      --Hồi sinh người chơi
       pure $ p { psHealth = 100, psPosition = newPos }
       
     else 
       pure p -- Không cần respawn
 
--- [THÊM MỚI]
 -- | Đệ quy tìm vị trí hồi sinh hợp lệ, giới hạn số lần thử
 findValidRespawnPos :: GameMap -> Vec2 -> Int -> IO Vec2
 findValidRespawnPos gameMap opponentPos attemptsLeft = do
   if attemptsLeft <= 0
     then do
       putStrLn $ "[GameLoop] Không tìm thấy vị trí respawn hợp lệ. Dùng fallback (100, 100)."
-      pure (Vec2 100 100) -- Vị trí fallback an toàn
+      pure (Vec2 100 100) 
     else do
-      -- 1. Lấy góc ngẫu nhiên (0 -> 2*PI)
+      -- góc ngẫu nhiên (0 -> 2*PI)
       angle <- Rnd.getRandomFloat (0, 2 * pi)
       
-      -- 2. Lấy khoảng cách ngẫu nhiên (ví dụ: 200-400 units)
+      -- khoảng cách ngẫu nhiên (ví dụ: 200-400 units)
       let minSpawnDist = 600.0
       let maxSpawnDist = 800.0
       dist <- Rnd.getRandomFloat (minSpawnDist, maxSpawnDist)
       
-      -- 3. Tính vị trí mới
+      -- Tính vị trí mới
       let offsetVec = Vec2 (sin angle) (cos angle) *^ dist
       let newPos = opponentPos + offsetVec
       
-      -- 4. Kiểm tra va chạm
+      -- Kiểm tra va chạm
       if not (isPositionColliding gameMap newPos)
         then pure newPos -- Vị trí hợp lệ
         else findValidRespawnPos gameMap opponentPos (attemptsLeft - 1) -- Thử lại
 
--- ================================================================
--- [THÊM MỚI] CÁC HÀM HELPER KIỂM TRA VA CHẠM
--- (Sao chép từ PhysicsSystem.hs để tránh circular dependency)
--- ================================================================
 
 playerRadius :: Float
 playerRadius = 16.0 
@@ -245,6 +232,7 @@ worldToGrid (Vec2 x y) =
   , floor (x / tileSize)
   )
 
+--Kiểm tra va chạm đề phòng spaw ngoài map 
 isTileSolidAtGrid :: GameMap -> (Int, Int) -> Bool
 isTileSolidAtGrid gmap (gy, gx) =
   let
@@ -259,6 +247,7 @@ isTileSolidAtGrid gmap (gy, gx) =
         let tile = (gmapTiles gmap) Array.! (gy, gx)
         in isSolid tile
 
+-- | Kiểm tra vị trí có va chạm với tường hay không
 isPositionColliding :: GameMap -> Vec2 -> Bool
 isPositionColliding gmap pos =
   let
