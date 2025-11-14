@@ -21,9 +21,8 @@ import Types.Tank (TankType)
 import Data.Maybe (Maybe)
 import Types.GameMode (GameMode)
 
--- ===================================================================
--- GÓI TIN TỪ CLIENT GỬI LÊN SERVER
--- ===================================================================
+---------------------------------------------------------------------------------------------------------
+-- GÓI TIN CLIENT GỬI SERVER
 
 -- Gói tin TCP (Dùng cho Login, Lobby, Quản lý phòng)
 data ClientTcpPacket
@@ -47,10 +46,10 @@ data ClientUdpPacket
   deriving (Show, Generic)
 
 instance Binary ClientUdpPacket
+---------------------------------------------------------------------------------------------------------
 
--- ===================================================================
--- GÓI TIN TỪ SERVER GỬI XUỐNG CLIENT
--- ===================================================================
+---------------------------------------------------------------------------------------------------------
+-- GÓI TIN SERVER GỬI CLIENT
 
 -- Gói tin TCP (Dùng cho Login, Lobby, Quản lý phòng)
 data ServerTcpPacket
@@ -71,10 +70,10 @@ data ServerUdpPacket
   deriving (Show, Generic)
 
 instance Binary ServerUdpPacket
+---------------------------------------------------------------------------------------------------------
 
--- ===================================================================
+
 -- CÁC KIỂU DỮ LIỆU HỖ TRỢ (Dùng trong gói tin)
--- ===================================================================
 
 -- Gói tin trạng thái thế giới (Giữ nguyên)
 data WorldSnapshot = WorldSnapshot
