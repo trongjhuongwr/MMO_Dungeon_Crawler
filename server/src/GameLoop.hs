@@ -8,8 +8,8 @@ import Control.Concurrent (threadDelay, MVar, newMVar, takeMVar, putMVar, readMV
 import Control.Monad (forever, when, void)
 import Network.Socket
 import qualified Data.Map as Map
-import Data.List (find) 
-import Data.Maybe (Maybe(..)) 
+import Data.List (find, nub)
+import Data.Maybe (Maybe(..), listToMaybe)
 import System.IO (hSetEncoding, stdout, stderr, utf8) 
 import Control.Exception (catch, SomeException, try, SomeException(..))
 
@@ -26,38 +26,18 @@ import qualified Network.Socket.ByteString as BS (sendTo)
 import Data.ByteString.Lazy.Internal (toStrict)
 
 import Types.Player (PlayerState(..)) 
-import Types.Common (Vec2(..))
+import Types.Common (Vec2(..), (*^))
 import Types.MatchState (MatchState(..))
 import Types.GameMode (GameMode(..))
+import qualified Utils.Random as Rnd
+import Types.Map (GameMap(..), isSolid)
+import qualified Data.Array as Array
 
 tickRate :: Int
 tickRate = 30
 
 tickInterval :: Int
 tickInterval = 1000000 `div` tickRate
-
-respawnDeadPlayers :: RoomGameState -> RoomGameState
-respawnDeadPlayers gs =
-  let
-    players = rgsPlayers gs
-    spawnPoints = rgsSpawns gs
-    
-    respawnPlayer :: PlayerState -> PlayerState
-    respawnPlayer p =
-      if psHealth p <= 0 && psLives p > 0
-        then 
-          let
-            spawnPos = if null spawnPoints
-                         then Vec2 0 0 -- Fallback
-                         else spawnPoints !! (psId p `mod` length spawnPoints)
-          in
-            p { psHealth = 100, psPosition = spawnPos }
-        else 
-          p
-          
-  in
-    gs { rgsPlayers = Map.map respawnPlayer players }
-
 
 gameLoop :: Socket -> String -> MVar RoomGameState -> MVar ServerState -> IO ()
 gameLoop sock roomId roomStateRef serverStateRef = (forever $ do
@@ -108,7 +88,9 @@ gameLoop sock roomId roomStateRef serverStateRef = (forever $ do
           let gs''' = resolveCollisions gs'' 
           let gs'''' = spawnNewBullets (rgsCurrentTime gs_with_time) gs'''
           let gs_filtered_entities = filterDeadEntities gs''''
-          let gs_respawned = respawnDeadPlayers gs_filtered_entities
+          
+          -- [THAY ĐỔI] Gọi hàm IO mới để respawn
+          gs_respawned <- respawnDeadPlayersIO gs_filtered_entities
           
           let (isGameOver, mWinnerId) = case rgsMode gs_respawned of
                 PvP -> 
@@ -178,3 +160,122 @@ gameLoop sock roomId roomStateRef serverStateRef = (forever $ do
       (void $ BS.sendTo sock strictPkt addr) `catch` \(e :: SomeException) -> do
         putStrLn $ "[UDP] Failed to send packet to " ++ show addr ++ ": " ++ show e
         pure () -- Bỏ qua lỗi và tiếp tục
+
+-- ================================================================
+-- LOGIC RESPAWN NGẪU NHIÊN
+-- ================================================================
+-- | Hàm IO chính để respawn người chơi, thay thế cho hàm thuần túy cũ
+respawnDeadPlayersIO :: RoomGameState -> IO RoomGameState
+respawnDeadPlayersIO gs = do
+  -- Dùng traverseWithKey (tương đương mapM) để áp dụng hàm IO
+  newPlayersMap <- Map.traverseWithKey (respawnPlayerIO gs) (rgsPlayers gs)
+  pure $ gs { rgsPlayers = newPlayersMap }
+
+-- [THÊM MỚI]
+-- | Logic respawn IO cho từng người chơi
+respawnPlayerIO :: RoomGameState -> SockAddr -> PlayerState -> IO PlayerState
+respawnPlayerIO gs addr p = do
+  if psHealth p <= 0 && psLives p > 0
+    then do
+      -- 1. Tìm một đối thủ (bất kỳ ai không phải 'p')
+      -- Logic này hoạt động cho cả PvP (tìm người kia) và PvE (người tìm bot / bot tìm người)
+      let mOpponent = listToMaybe $ Map.elems $ Map.delete addr (rgsPlayers gs)
+      
+      newPos <- case mOpponent of
+        Nothing -> do 
+          -- Không tìm thấy ai khác, hoặc là người cuối cùng
+          -- Dùng lại logic spawn cũ
+          let spawnPoints = rgsSpawns gs
+          let fallbackPos = if null spawnPoints
+                              then Vec2 100 100 -- Fallback an toàn
+                              else spawnPoints !! (psId p `mod` length spawnPoints)
+          pure fallbackPos
+        
+        Just opponent -> do
+          -- 2. Tìm vị trí hồi sinh hợp lệ, cách xa đối thủ
+          -- Thử 10 lần, nếu không được sẽ dùng fallback
+          findValidRespawnPos (rgsMap gs) (psPosition opponent) 10
+
+      -- 3. Hồi sinh người chơi
+      pure $ p { psHealth = 100, psPosition = newPos }
+      
+    else 
+      pure p -- Không cần respawn
+
+-- [THÊM MỚI]
+-- | Đệ quy tìm vị trí hồi sinh hợp lệ, giới hạn số lần thử
+findValidRespawnPos :: GameMap -> Vec2 -> Int -> IO Vec2
+findValidRespawnPos gameMap opponentPos attemptsLeft = do
+  if attemptsLeft <= 0
+    then do
+      putStrLn $ "[GameLoop] Không tìm thấy vị trí respawn hợp lệ. Dùng fallback (100, 100)."
+      pure (Vec2 100 100) -- Vị trí fallback an toàn
+    else do
+      -- 1. Lấy góc ngẫu nhiên (0 -> 2*PI)
+      angle <- Rnd.getRandomFloat (0, 2 * pi)
+      
+      -- 2. Lấy khoảng cách ngẫu nhiên (ví dụ: 200-400 units)
+      let minSpawnDist = 600.0
+      let maxSpawnDist = 800.0
+      dist <- Rnd.getRandomFloat (minSpawnDist, maxSpawnDist)
+      
+      -- 3. Tính vị trí mới
+      let offsetVec = Vec2 (sin angle) (cos angle) *^ dist
+      let newPos = opponentPos + offsetVec
+      
+      -- 4. Kiểm tra va chạm
+      if not (isPositionColliding gameMap newPos)
+        then pure newPos -- Vị trí hợp lệ
+        else findValidRespawnPos gameMap opponentPos (attemptsLeft - 1) -- Thử lại
+
+-- ================================================================
+-- [THÊM MỚI] CÁC HÀM HELPER KIỂM TRA VA CHẠM
+-- (Sao chép từ PhysicsSystem.hs để tránh circular dependency)
+-- ================================================================
+
+playerRadius :: Float
+playerRadius = 16.0 
+
+tileSize :: Float
+tileSize = 32.0
+
+worldToGrid :: Vec2 -> (Int, Int)
+worldToGrid (Vec2 x y) =
+  ( floor (y / tileSize)
+  , floor (x / tileSize)
+  )
+
+isTileSolidAtGrid :: GameMap -> (Int, Int) -> Bool
+isTileSolidAtGrid gmap (gy, gx) =
+  let
+    (yMin, xMin) = fst (Array.bounds (gmapTiles gmap))
+    (yMax, xMax) = snd (Array.bounds (gmapTiles gmap))
+    
+    isOutOfBounds = gy < yMin || gy > yMax || gx < xMin || gx > xMax
+  in
+    if isOutOfBounds
+      then True 
+      else
+        let tile = (gmapTiles gmap) Array.! (gy, gx)
+        in isSolid tile
+
+isPositionColliding :: GameMap -> Vec2 -> Bool
+isPositionColliding gmap pos =
+  let
+    (Vec2 x y) = pos
+    r = playerRadius
+    
+    posTopLeft  = Vec2 (x - r) (y + r)
+    posTopRight = Vec2 (x + r) (y + r)
+    posBotLeft  = Vec2 (x - r) (y - r)
+    posBotRight = Vec2 (x + r) (y - r)
+
+    gridCoords = nub 
+      [ worldToGrid posTopLeft
+      , worldToGrid posTopRight
+      , worldToGrid posBotLeft
+      , worldToGrid posBotRight
+      ]
+      
+  in
+    any (isTileSolidAtGrid gmap) gridCoords

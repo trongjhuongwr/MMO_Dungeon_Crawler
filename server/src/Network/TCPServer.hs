@@ -488,17 +488,33 @@ processPacket dbConn mPid h pkt sState serverStateRef =
               rgs_peek <- readMVar gameMVar
               let currentGameMode = rgsMode rgs_peek -- <--- Lấy mode hiện tại (PvP hoặc PvE)
 
-              -- Tạo action reset game (giữ nguyên)
+              -- [SỬA LỖI] Thay thế logic reset vị trí
               let resetGameAction = modifyMVar_ gameMVar $ \rgs -> do
-                    let getSpawnPos pId spawns = if null spawns
-                                                  then Vec2 100 100
-                                                  else spawns !! (pId `mod` length spawns)
+                    let spawns = rgsSpawns rgs
+                    -- Lấy danh sách (SockAddr, PlayerState)
+                    let playerAssocs = Map.assocs (rgsPlayers rgs)
                     
-                    let resetPlayerState p = p { psHealth = 100, psLives = 3, psPosition = getSpawnPos (psId p) (rgsSpawns rgs), psLastFireTime = 0.0 }
-                    let newPlayerStates = Map.map resetPlayerState (rgsPlayers rgs)
+                    -- Hàm reset, nhận (addr, player) và vị trí spawn mới
+                    let resetAndAssign (addr, p) spawnPos = 
+                          (addr, p { psHealth = 100
+                                   , psLives = 3
+                                   , psPosition = spawnPos -- Gán vị trí spawn mới
+                                   , psLastFireTime = 0.0 
+                                   })
+                    
+                    -- Ghép người chơi với vị trí spawn (p1 -> spawn1, p2 -> spawn2)
+                    -- Đảm bảo an toàn nếu không có spawn (thêm fallback)
+                    let safeSpawns = if (length spawns) < (length playerAssocs)
+                                       then cycle (spawns ++ [Vec2 100 100])
+                                       else spawns
+                                       
+                    let newPlayerAssocs = zipWith resetAndAssign playerAssocs safeSpawns
+                    
+                    -- Tạo lại Map
+                    let newPlayersMap = Map.fromList newPlayerAssocs
 
                     let newGameState = (initialRoomGameState (rgsMap rgs) (rgsSpawns rgs) (rgsMode rgs))
-                          { rgsPlayers = newPlayerStates
+                          { rgsPlayers = newPlayersMap -- Sử dụng Map mới
                           , rgsMatchState = InProgress
                           }
                     pure newGameState
