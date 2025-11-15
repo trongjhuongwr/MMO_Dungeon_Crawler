@@ -43,13 +43,13 @@ udpListenLoop sock serverStateRef = forever $ do
           CUP_Handshake pid -> do
             putStrLn $ "[UDP] Handshake from " ++ show pid ++ " at " ++ show addr
             
-            -- B1: Khóa S-lock (serverStateRef) để cập nhật pcUdpAddr VÀ lấy ra mGameMVar cùng hành động R-lock (nếu có)
+            -- Khóa S-lock (serverStateRef) để cập nhật pcUdpAddr VÀ lấy ra mGameMVar cùng hành động R-lock (nếu có)
             mGameAction <- modifyMVar serverStateRef $ \sState -> do
               let (mRoom, mRoomId) = findRoomByPlayerId pid sState
               case (mRoom, mRoomId) of
                 (Just room, Just roomId) -> do
                   case Map.lookup pid (roomPlayers room) of
-                    Nothing -> pure (sState, Nothing) -- Lỗi: PlayerID không có trong phòng
+                    Nothing -> pure (sState, Nothing) -- PlayerID không có trong phòng
                     Just client -> do
                       -- Cập nhật địa chỉ UDP cho client
                       let updatedClient = client { pcUdpAddr = Just addr }
@@ -58,7 +58,7 @@ udpListenLoop sock serverStateRef = forever $ do
                       let newRooms = Map.insert roomId updatedRoom (ssRooms sState)
                       let newState = sState { ssRooms = newRooms }
 
-                      -- Tạo hành động R-lock (sẽ chạy bên ngoài)
+                      -- Tạo hành động R-lock (chạy bên ngoài)
                       let mAction = case roomGame room of
                             Nothing -> Nothing -- Game chưa bắt đầu
                             Just gameMVar -> Just $ do
@@ -69,33 +69,35 @@ udpListenLoop sock serverStateRef = forever $ do
                                     let newPlayers = Map.insert addr pState (Map.delete fakeAddr (rgsPlayers rgs))
                                     putStrLn $ "[UDP] Registered " ++ show pid ++ " to " ++ show addr
                                     pure (rgs { rgsPlayers = newPlayers })
-                                  _ -> pure rgs -- Lỗi: không tìm thấy state
+                                  _ -> pure rgs -- không tìm thấy state
                       
                       pure (newState, mAction)
-                _ -> pure (sState, Nothing) -- Lỗi: PlayerID không thuộc phòng nào
+                _ -> pure (sState, Nothing) -- PlayerID không thuộc phòng nào
 
-            -- B2: Chạy hành động R-lock (BÊN NGOÀI S-lock)
+            -- Chạy hành động R-lock (BÊN NGOÀI S-lock)
             case mGameAction of
               Just action -> action
               Nothing -> pure ()
 
           -- GÓI COMMAND: Chỉ cần cập nhật R-lock
           CUP_Command pCmd -> do
-            -- B1: Đọc S-lock (nhanh) để tìm MVar
+            -- Đọc S-lock (nhanh) để tìm MVar
             mGameMVar <- readMVar serverStateRef >>= \sState -> do
               let (mRoom, _) = findRoomByUdpAddr addr sState
               pure (mRoom >>= roomGame)
 
-            -- B2: Khóa R-lock (nếu tìm thấy)
+            -- Khóa R-lock (nếu tìm thấy)
             case mGameMVar of
-              Nothing -> pure () -- Gói tin rác hoặc phòng chờ
+              Nothing -> pure ()
               Just gameMVar -> do
                 -- Thêm command vào RoomGameState
                 modifyMVar_ gameMVar $ \rgs -> do
                   let newCommands = (Command addr pCmd) : rgsCommands rgs
                   pure (rgs { rgsCommands = newCommands })
 
--- === HÀM TIỆN ÍCH ===
+
+-- HÀM TIỆN ÍCH
+-- Tìm phòng theo Player ID
 findRoomByPlayerId :: Int -> ServerState -> (Maybe Room, Maybe String)
 findRoomByPlayerId pid sState =
   let found = find (\(_, room) -> Map.member pid (roomPlayers room)) (Map.assocs (ssRooms sState))
@@ -103,6 +105,7 @@ findRoomByPlayerId pid sState =
     Just (roomId, room) -> (Just room, Just roomId)
     Nothing -> (Nothing, Nothing)
 
+-- Tìm phòng theo địa chỉ UDP
 findRoomByUdpAddr :: SockAddr -> ServerState -> (Maybe Room, Maybe String)
 findRoomByUdpAddr addr sState =
   let found = find (\(_, room) -> any (\c -> pcUdpAddr c == Just addr) (Map.elems (roomPlayers room))) (Map.assocs (ssRooms sState))
@@ -110,6 +113,7 @@ findRoomByUdpAddr addr sState =
     Just (roomId, room) -> (Just room, Just roomId)
     Nothing -> (Nothing, Nothing)
 
+-- Tìm địa chỉ giả và trạng thái người chơi theo Player ID trong RoomGameState
 findFakeAddrByPlayerId :: Int -> RoomGameState -> (Maybe SockAddr, Maybe PlayerState)
 findFakeAddrByPlayerId pid rgs =
   let found = find (\(_, pState) -> psId pState == pid) (Map.assocs (rgsPlayers rgs))

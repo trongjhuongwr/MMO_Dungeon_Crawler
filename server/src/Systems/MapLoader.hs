@@ -17,9 +17,11 @@ import Control.Monad (when)
 import Types.Map (GameMap(..), TileType(..))
 import Types.Common (Vec2(..))
 
+-- Đại diện tọa độ lưới dưới dạng số nguyên
 data Vec2Int = Vec2Int { x :: Int, y :: Int }
   deriving (Show, Generic, FromJSON)
 
+-- Đại diện định nghĩa bản đồ trong JSON
 data MapDefinition = MapDefinition
   { gridWidth    :: Int
   , gridHeight   :: Int
@@ -27,12 +29,15 @@ data MapDefinition = MapDefinition
   , tileIDs      :: [[Int]]
   } deriving (Show, Generic)
 
+-- Tự động tạo instance FromJSON cho MapDefinition
 instance FromJSON MapDefinition
 
+-- Chuyển đổi tọa độ lưới sang tọa độ thế giới
 gridToWorld :: Vec2Int -> Vec2
 gridToWorld (Vec2Int gx gy) =
   Vec2 (fromIntegral gx * 32.0) (fromIntegral gy * 32.0)
 
+-- Chuyển đổi từ Int sang TileType
 intToTile :: Int -> TileType
 intToTile i =
   let maxVal = fromEnum (maxBound :: TileType)
@@ -40,12 +45,12 @@ intToTile i =
        then toEnum i
        else Empty -- Mặc định là 'Empty' nếu ID trong JSON không hợp lệ
 
-
+-- Tải bản đồ từ file JSON
 loadMapFromFile :: FilePath -> IO (Either String (GameMap, [Vec2]))
 loadMapFromFile path = do
   jsonData <- B.readFile path
   case eitherDecode jsonData of
-    Left err -> return $ Left ("Lỗi parse JSON: " ++ err)
+    Left err -> return $ Left ("Error parse JSON: " ++ err)
     Right mapDef -> do
       let
         w = gridWidth mapDef
@@ -54,10 +59,10 @@ loadMapFromFile path = do
         rows = tileIDs mapDef
 
       when (h /= length rows) $
-        fail $ "Lỗi Map: gridHeight (" ++ show h ++ ") không khớp số hàng tileIDs (" ++ show (length rows) ++ ")"
+        fail $ "Map Error: gridHeight(" ++ show h ++ ") does not match tileID row numbers (" ++ show (length rows) ++ ")"
         
       when (any (\row -> w /= length row) rows) $
-        fail $ "Lỗi Map: Một hàng có gridWidth (" ++ show w ++ ") không khớp với độ dài hàng"
+        fail $ "Map Error: A row with gridWidth(" ++ show w++ ") does not match the row length"
 
       let
         flatInts = concat rows

@@ -5,7 +5,7 @@ module Types.Tank (TankType(..)) where
 import GHC.Generics (Generic)
 import Data.Binary (Binary)
 
--- Định nghĩa loại tank (Giữ nguyên)
+-- Định nghĩa loại tank
 data TankType
   = Rapid
   | Blast
