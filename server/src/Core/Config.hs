@@ -10,7 +10,7 @@ import Data.Yaml
 import GHC.Generics (Generic)
 import Network.Socket (PortNumber)
 
--- | Định nghĩa cấu trúc của file server.yaml
+-- Định nghĩa cấu trúc của file server.yaml
 data AppConfig = AppConfig
   { port     :: Int
   , udpPort  :: Int
@@ -18,8 +18,7 @@ data AppConfig = AppConfig
   , mapFile  :: FilePath
   } deriving (Show, Generic, FromJSON)
 
--- | Tải config từ một file.
--- | Sẽ fail nếu file không tồn tại hoặc parse lỗi.
+-- Tải config từ một file
 loadConfig :: FilePath -> IO AppConfig
 loadConfig path = do
   eConfig <- decodeFileEither path

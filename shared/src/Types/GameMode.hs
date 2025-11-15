@@ -7,6 +7,7 @@ module Types.GameMode where
 import GHC.Generics (Generic)
 import Data.Binary (Binary)
 
+-- Định nghĩa các chế độ chơi
 data GameMode = PvP | PvE
   deriving (Eq, Show, Generic)
 

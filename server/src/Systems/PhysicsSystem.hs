@@ -16,18 +16,22 @@ import Data.List (nub)
 import Types.Tank (TankType(..))
 import qualified Types.Tank as Tank
 
+-- Tốc độ quay của người chơi (radians per second)
 playerTurnSpeed :: Float
 playerTurnSpeed = 1.5
 
+-- Kích thước của mỗi ô trong bản đồ
 tileSize :: Float
 tileSize = 32.0
 
+-- Chuyển đổi từ tọa độ thế giới sang tọa độ lưới
 worldToGrid :: Vec2 -> (Int, Int)
 worldToGrid (Vec2 x y) =
   ( floor (y / tileSize)
   , floor (x / tileSize)
   )
 
+-- Kiểm tra xem ô tại tọa độ lưới có phải là ô rắn không
 isTileSolidAtGrid :: GameMap -> (Int, Int) -> Bool
 isTileSolidAtGrid gmap (gy, gx) =
   let
@@ -42,12 +46,15 @@ isTileSolidAtGrid gmap (gy, gx) =
         let tile = (gmapTiles gmap) Array.! (gy, gx)
         in isSolid tile
 
+-- Kiểm tra xem vị trí thế giới có phải là vị trí rắn không
 isPositionSolid :: GameMap -> Vec2 -> Bool
 isPositionSolid gmap pos = isTileSolidAtGrid gmap (worldToGrid pos)
 
+-- Bán kính của người chơi
 playerRadius :: Float
 playerRadius = 16.0 
 
+-- Kiểm tra va chạm tại vị trí người chơi
 isPositionColliding :: GameMap -> Vec2 -> Bool
 isPositionColliding gmap pos =
   let
@@ -69,6 +76,7 @@ isPositionColliding gmap pos =
   in
     any (isTileSolidAtGrid gmap) gridCoords
 
+-- Cập nhật vật lý người chơi dựa trên các lệnh đã nhận
 updatePlayerPhysics :: Float -> RoomGameState -> RoomGameState
 updatePlayerPhysics dt gs =
   let
@@ -84,6 +92,7 @@ updatePlayerPhysics dt gs =
   in
     gs { rgsPlayers = updatedPlayers }
 
+-- Cập nhật trạng thái người chơi dựa trên lệnh di chuyển và nòng súng
 updatePlayerState :: Float -> GameMap -> PlayerState -> Vec2 -> Float -> PlayerState
 updatePlayerState dt gmap ps moveVec angle =
   let
@@ -91,6 +100,7 @@ updatePlayerState dt gmap ps moveVec angle =
   in
     movedPlayer { psTurretAngle = angle }
 
+-- Cập nhật vị trí và góc của người chơi dựa trên lệnh di chuyển
 updatePlayerMovement :: Float -> GameMap -> PlayerState -> Vec2 -> PlayerState
 updatePlayerMovement dt gmap ps moveVec =
   let
@@ -116,6 +126,7 @@ updatePlayerMovement dt gmap ps moveVec =
                  
   in ps { psPosition = finalPos, psBodyAngle = newBodyAngle }
 
+-- Cập nhật vật lý đạn
 updateBulletPhysics :: Float -> RoomGameState -> RoomGameState
 updateBulletPhysics dt gs =
   let
@@ -123,12 +134,14 @@ updateBulletPhysics dt gs =
   in
     gs { rgsBullets = updatedBullets }
 
+-- Di chuyển đạn dựa trên vận tốc và thời gian sống còn lại
 moveBullet :: Float -> BulletState -> BulletState
 moveBullet dt b = b
   { bsPosition = bsPosition b + (bsVelocity b *^ dt)
   , bsLifetime = bsLifetime b - dt
   }
 
+-- Lọc bỏ các thực thể đã chết khỏi trạng thái trò chơi
 filterDeadEntities :: RoomGameState -> RoomGameState
 filterDeadEntities gs =
   let

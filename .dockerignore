@@ -12,5 +12,5 @@
 *.swp
 .DS_Store
 
-# Bỏ qua file database (chúng ta sẽ dùng Volume)
+# Bỏ qua file database (dùng Volume)
 mmo_server.db

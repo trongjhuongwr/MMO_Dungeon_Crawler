@@ -15,20 +15,22 @@ import qualified Data.Map as Map
 import Data.List (nub) 
 
 bulletSpeed :: Float
-bulletSpeed = 300.0
+bulletSpeed = 300.0  -- Tốc độ viên đạn
 
 bulletLifetime :: Float
-bulletLifetime = 2.0
+bulletLifetime = 2.0 -- Viên đạn tồn tại trong 2 giây
 
 rapidCooldown :: Float
-rapidCooldown = 0.2 -- 0.2 giây (5 viên/giây)
+rapidCooldown = 0.2  -- 0.2 giây (5 viên/giây)
 
 blastCooldown :: Float
-blastCooldown = 1.0 -- 1.0 giây (1 viên/giây)
+blastCooldown = 1.0  -- 1.0 giây (1 viên/giây)
 
+-- Xử lý va chạm giữa đạn và người chơi
 resolveCollisions :: RoomGameState -> RoomGameState
 resolveCollisions = checkCollisions
 
+-- Tạo đạn mới dựa trên lệnh bắn từ người chơi
 spawnNewBullets :: Float -> RoomGameState -> RoomGameState
 spawnNewBullets currentTime gs =
   let
@@ -58,7 +60,7 @@ spawnNewBullets currentTime gs =
               if not canFire
                 then go cmds nextId currentGs -- Vẫn đang cooldown
                 else
-                  -- Bắn!
+                  -- Bắn đạn mới
                   let
                     angle = psTurretAngle player
                     vel = Vec2 (sin angle) (cos angle) *^ bulletSpeed
@@ -81,6 +83,7 @@ spawnNewBullets currentTime gs =
                   in
                     go cmds newNextId newGameState
 
+-- Kiểm tra va chạm giữa đạn và người chơi
 checkCollisions :: RoomGameState -> RoomGameState
 checkCollisions gs =
   let
@@ -98,6 +101,7 @@ checkCollisions gs =
        , rgsPlayers = updatedPlayersMap
        }
 
+-- Tìm và xử lý va chạm giữa đạn và người chơi
 findPlayerCollisions :: [BulletState] -> Map.Map SockAddr PlayerState -> ([Int], Map.Map SockAddr PlayerState)
 findPlayerCollisions bullets playersMap =
   let
@@ -117,36 +121,41 @@ findPlayerCollisions bullets playersMap =
   in
     (collidedBulletIds, updatedPlayersMap)
 
+-- Áp dụng sát thương cho người chơi dựa trên danh sách sát thương
 damagePlayers :: [(Int, Bullet.BulletType)] -> Map.Map SockAddr PlayerState -> Map.Map SockAddr PlayerState
 damagePlayers damageList playersMap =
   foldl (flip applyDamage) playersMap damageList
   where
+    -- Áp dụng sát thương cho tất cả người chơi
     applyDamage :: (Int, Bullet.BulletType) -> Map.Map SockAddr PlayerState -> Map.Map SockAddr PlayerState
     applyDamage (attackedPlayerId, bulletType) pMap =
       Map.map (damagePlayer attackedPlayerId bulletType) pMap
-      
+    
+    -- Áp dụng sát thương cho một người chơi cụ thể
     damagePlayer :: Int -> Bullet.BulletType -> PlayerState -> PlayerState
     damagePlayer attackedPlayerId bulletType player =
       if psId player /= attackedPlayerId || psHealth player <= 0 
-        then player 
+        then player
         else
           let damage = case bulletType of
-                         Bullet.Normal -> 4
-                         Bullet.Blast  -> 25
+                         Bullet.Normal -> 4  -- Sát thương của đạn thường
+                         Bullet.Blast  -> 25 -- Sát thương của đạn nổ
               newHealth = psHealth player - damage
-          in 
+          in
+            -- Cập nhật máu và số mạng
             if newHealth <= 0
               then player { psHealth = 0, psLives = psLives player - 1 }
               else player { psHealth = newHealth }
 
+-- Kiểm tra va chạm giữa đạn và người chơi
 isPlayerColliding :: (BulletState, PlayerState) -> Bool
 isPlayerColliding (bullet, player) =
   let
     (Vec2 bx by) = bsPosition bullet
     (Vec2 px py) = psPosition player
     
-    playerHalfWidth = 10.0 
-    bulletHalfWidth = 2.0
+    playerHalfWidth = 10.0 -- Nửa kích thước người chơi
+    bulletHalfWidth = 2.0  -- Nửa kích thước viên đạn
     
     collidesX = abs (bx - px) < (playerHalfWidth + bulletHalfWidth)
     collidesY = abs (by - py) < (playerHalfWidth + bulletHalfWidth)

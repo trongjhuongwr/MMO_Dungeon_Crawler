@@ -17,6 +17,7 @@ import Control.Concurrent.MVar (MVar)
 import Types.GameMode (GameMode(..))
 import Database.SQLite.Simple (Connection)
 
+-- Khai báo trạng thái trò chơi trong một phòng
 data RoomGameState = RoomGameState
   { rgsTick     :: Int
   , rgsCommands :: [Command]
@@ -31,8 +32,10 @@ data RoomGameState = RoomGameState
   , rgsCurrentTime :: Float
   }
 
+-- Đại diện cho một lệnh từ người chơi
 data Command = Command SockAddr PlayerCommand
 
+-- Hàm khởi tạo trạng thái ban đầu cho một phòng chơi
 initialRoomGameState :: GameMap -> [Vec2] -> GameMode -> RoomGameState
 initialRoomGameState loadedMap spawnPoints mode = RoomGameState
   { rgsTick = 0
@@ -48,6 +51,7 @@ initialRoomGameState loadedMap spawnPoints mode = RoomGameState
   , rgsCurrentTime = 0.0
   }
 
+-- Hàm khởi tạo trạng thái ban đầu cho một người chơi
 initialPlayerState :: Vec2 -> Int -> TankType -> Float -> PlayerState
 initialPlayerState spawnPos playerId tankType initialAngle = PlayerState
   { 
@@ -61,16 +65,19 @@ initialPlayerState spawnPos playerId tankType initialAngle = PlayerState
   , psLastFireTime = 0.0
   }
 
+
 -- ================================================================
 -- TRẠNG THÁI TOÀN CỤC CỦA SERVER (QUẢN LÝ LOBBY)
 -- ================================================================
 
+-- Đại diện cho một client người chơi kết nối tới server
 data PlayerClient = PlayerClient
   { pcHandle :: Handle     
   , pcInfo   :: PlayerInfo 
   , pcUdpAddr :: Maybe SockAddr 
   }
 
+-- Đại diện cho một phòng chơi
 data Room = Room
   { roomMsgId   :: String 
   , roomPlayers :: Map.Map Int PlayerClient 
@@ -78,6 +85,7 @@ data Room = Room
   , roomRematchRequests :: Set.Set Int
   }
 
+-- Trạng thái toàn cục của server
 data ServerState = ServerState
   { ssClients :: Map.Map Int PlayerClient 
   , ssRooms   :: Map.Map String Room      
@@ -88,6 +96,7 @@ data ServerState = ServerState
   , ssDbConn    :: Connection
   }
 
+-- Hàm khởi tạo trạng thái ban đầu cho server
 initialServerState :: Socket -> GameMap -> [Vec2] -> Connection -> ServerState
 initialServerState sock gmap spawns dbConn = ServerState
   { ssClients = Map.empty

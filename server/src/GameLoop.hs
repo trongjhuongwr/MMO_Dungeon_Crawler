@@ -33,12 +33,15 @@ import qualified Utils.Random as Rnd
 import Types.Map (GameMap(..), isSolid)
 import qualified Data.Array as Array
 
+-- Cấu hình tick rate
 tickRate :: Int
 tickRate = 30
 
+-- Khoảng thời gian giữa các tick (microseconds)
 tickInterval :: Int
 tickInterval = 1000000 `div` tickRate
 
+-- Vòng lặp chính của game
 gameLoop :: Socket -> String -> MVar RoomGameState -> MVar ServerState -> IO ()
 gameLoop sock roomId roomStateRef serverStateRef = (forever $ do
   -- KIỂM TRA TRẠNG THÁI SERVER (KHÔNG GIỮ KHÓA ROOM)
@@ -88,7 +91,7 @@ gameLoop sock roomId roomStateRef serverStateRef = (forever $ do
           let gs'''' = spawnNewBullets (rgsCurrentTime gs_with_time) gs'''
           let gs_filtered_entities = filterDeadEntities gs''''
           
-          -- respawn
+          -- RESPAWN NGƯỜI CHƠI
           gs_respawned <- respawnDeadPlayersIO gs_filtered_entities
           
           let (isGameOver, mWinnerId) = case rgsMode gs_respawned of
@@ -104,13 +107,13 @@ gameLoop sock roomId roomStateRef serverStateRef = (forever $ do
                        then (True, fmap psId (find (const True) (Map.elems alivePlayers_PvE)))
                        else (False, Nothing)
           
+          -- KIỂM TRA KẾT THÚC TRẬN ĐẤU
           if isGameOver
             then do
-              -- GAME OVER
               putStrLn $ "[GameLoop " ++ roomId ++ "] Match Over. Winner: " ++ show mWinnerId
               let newState = gs_respawned { rgsMatchState = GameOver mWinnerId, rgsCommands = [] }
               let packet = SUP_MatchStateUpdate (GameOver mWinnerId)
-              -- Gửi gói tin cho TẤT CẢ player addrs (kể cả người đã chết)
+              -- Gửi gói tin cho tất cả player addrs (kể cả người đã chết)
               pure (newState, [(packet, Map.keys (rgsPlayers gs_respawned))])
             else do
               -- GAME TIẾP TỤC
@@ -128,7 +131,7 @@ gameLoop sock roomId roomStateRef serverStateRef = (forever $ do
           let packet = SUP_MatchStateUpdate (GameOver winnerId)
           pure (gs, [(packet, Map.keys (rgsPlayers gs))])
       
-      -- GỬI PACKETS (BÊN NGOÀI 'case')
+      -- GỬI PACKETS
       sendPackets sock packetsToSend
       
       -- CẬP NHẬT STATE VÀ NGỦ
@@ -142,13 +145,12 @@ gameLoop sock roomId roomStateRef serverStateRef = (forever $ do
     pure ()
 
   where
-    -- Gửi gói tin
+    -- Gửi gói tin đến các địa chỉ UDP đã đăng ký
     sendPackets :: Socket -> [(ServerUdpPacket, [SockAddr])] -> IO ()
     sendPackets sock packetsToSend = do
       mapM_ (\(pkt, targetAddrs) -> do
         let lazyPkt = encode pkt
         let strictPkt = toStrict lazyPkt
-        -- Gửi đến các địa chỉ UDP đã đăng ký
         mapM_ (sendPacketInternal sock strictPkt) targetAddrs
         ) packetsToSend
 
@@ -157,7 +159,7 @@ gameLoop sock roomId roomStateRef serverStateRef = (forever $ do
     sendPacketInternal sock strictPkt addr = 
       (void $ BS.sendTo sock strictPkt addr) `catch` \(e :: SomeException) -> do
         putStrLn $ "[UDP] Failed to send packet to " ++ show addr ++ ": " ++ show e
-        pure () -- Bỏ qua lỗi và tiếp tục
+        pure ()
 
 -- Hàm IO chính để respawn người chơi
 respawnDeadPlayersIO :: RoomGameState -> IO RoomGameState
@@ -176,7 +178,6 @@ respawnPlayerIO gs addr p = do
       newPos <- case mOpponent of
         Nothing -> do 
           -- Không tìm thấy ai khác, hoặc là người cuối cùng
-          -- Dùng lại logic spawn cũ
           let spawnPoints = rgsSpawns gs
           let fallbackPos = if null spawnPoints
                               then Vec2 100 100 -- Fallback an toàn
@@ -185,21 +186,20 @@ respawnPlayerIO gs addr p = do
         
         Just opponent -> do
           -- Tìm vị trí hồi sinh hợp lệ, cách xa đối thủ
-          -- Thử 10 lần, nếu không được sẽ dùng fallback
-          findValidRespawnPos (rgsMap gs) (psPosition opponent) 10
+          findValidRespawnPos (rgsMap gs) (psPosition opponent) 10 -- Thử 10 lần, nếu không được sẽ dùng fallback
 
-      --Hồi sinh người chơi
+      -- Hồi sinh người chơi
       pure $ p { psHealth = 100, psPosition = newPos }
       
     else 
       pure p -- Không cần respawn
 
--- | Đệ quy tìm vị trí hồi sinh hợp lệ, giới hạn số lần thử
+-- Đệ quy tìm vị trí hồi sinh hợp lệ, giới hạn số lần thử
 findValidRespawnPos :: GameMap -> Vec2 -> Int -> IO Vec2
 findValidRespawnPos gameMap opponentPos attemptsLeft = do
   if attemptsLeft <= 0
     then do
-      putStrLn $ "[GameLoop] Không tìm thấy vị trí respawn hợp lệ. Dùng fallback (100, 100)."
+      putStrLn $ "[GameLoop] No valid respawn location found. Using fallback (100, 100)."
       pure (Vec2 100 100) 
     else do
       -- góc ngẫu nhiên (0 -> 2*PI)
@@ -220,19 +220,23 @@ findValidRespawnPos gameMap opponentPos attemptsLeft = do
         else findValidRespawnPos gameMap opponentPos (attemptsLeft - 1) -- Thử lại
 
 
+-- HÀM TIỆN ÍCH
+-- Bán kính người chơi (dùng để kiểm tra va chạm)
 playerRadius :: Float
 playerRadius = 16.0 
 
+-- Kích thước ô trong thế giới
 tileSize :: Float
 tileSize = 32.0
 
+-- Chuyển đổi từ tọa độ thế giới sang tọa độ lưới
 worldToGrid :: Vec2 -> (Int, Int)
 worldToGrid (Vec2 x y) =
   ( floor (y / tileSize)
   , floor (x / tileSize)
   )
 
---Kiểm tra va chạm đề phòng spaw ngoài map 
+-- Kiểm tra va chạm đề phòng spawn ngoài map 
 isTileSolidAtGrid :: GameMap -> (Int, Int) -> Bool
 isTileSolidAtGrid gmap (gy, gx) =
   let
@@ -247,7 +251,7 @@ isTileSolidAtGrid gmap (gy, gx) =
         let tile = (gmapTiles gmap) Array.! (gy, gx)
         in isSolid tile
 
--- | Kiểm tra vị trí có va chạm với tường hay không
+-- Kiểm tra vị trí có va chạm với tường hay không
 isPositionColliding :: GameMap -> Vec2 -> Bool
 isPositionColliding gmap pos =
   let

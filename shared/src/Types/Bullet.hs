@@ -14,7 +14,7 @@ data BulletType
 
 instance Binary BulletType
 
--- | Trạng thái của một viên đạn, do server quản lý và đồng bộ
+-- Trạng thái của một viên đạn, do server quản lý và đồng bộ
 data BulletState = BulletState
   { bsId         :: Int
   , bsOwnerId    :: Int

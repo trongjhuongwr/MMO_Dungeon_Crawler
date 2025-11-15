@@ -19,8 +19,8 @@ import Data.Int (Int64)
 import Data.Maybe (isJust, fromMaybe, isNothing)
 import Data.List (find)
 import Control.Exception (catch, SomeException, bracket, try)
-import Database.SQLite.Simple (Connection) -- DB
-import Data.Queries.PlayerQuery (registerUser, authenticateUser) -- DB
+import Database.SQLite.Simple (Connection)
+import Data.Queries.PlayerQuery (registerUser, authenticateUser)
 import qualified Data.Text as T 
 
 import Core.Types
@@ -57,8 +57,7 @@ sendTcpPacket h pkt = (do
 generateRoomId :: IO String
 generateRoomId = do
   num <- Rnd.getRandomNumber
-  -- Đảm bảo Room ID có 4 chữ số
-  pure $ take 4 (show (abs num `mod` 10000 + 10000))
+  pure $ take 4 (show (abs num `mod` 10000 + 10000)) -- Đảm bảo Room ID có 4 chữ số
 
 
 startTcpServer :: AppConfig -> MVar ServerState -> IO ()
@@ -71,8 +70,7 @@ startTcpServer config serverStateRef = withSocketsDo $ do
     forever $ do
       (conn, clientAddr) <- accept sock
       putStrLn $ "[TCP Server] Client connected from: " ++ show clientAddr
-      -- forkIO cho mỗi client mới
-      _ <- forkIO $ handleClient conn clientAddr serverStateRef
+      _ <- forkIO $ handleClient conn clientAddr serverStateRef -- forkIO cho mỗi client mới
       return ()
   where
     resolve port = do
@@ -87,15 +85,14 @@ startTcpServer config serverStateRef = withSocketsDo $ do
 
 handleClient :: Socket -> SockAddr -> MVar ServerState -> IO ()
 handleClient sock addr serverStateRef = do
-  setSocketOption sock NoDelay 1 -- Tắt Nagle's algorithm
+  setSocketOption sock NoDelay 1 -- Tắt Nagle's algorithm để giảm độ trễ
   h <- socketToHandle sock ReadWriteMode
-  hSetBuffering h NoBuffering    -- Rất quan trọng
+  hSetBuffering h NoBuffering    -- Tắt buffering để gửi nhận ngay lập tức
   
-  -- Vòng lặp đọc-xử lý, bắt exception (như disconnect)
+  -- Vòng lặp đọc-xử lý, bắt exception như disconnect
   loop h Nothing LBS.empty `catch` \(e :: SomeException) -> do
     putStrLn $ "[TCP] Terminating client loop for " ++ show addr ++ ". Reason: " ++ show e
-    -- Đảm bảo ngắt kết nối an toàn nếu vòng lặp bị crash
-    handleDisconnect h Nothing serverStateRef
+    handleDisconnect h Nothing serverStateRef -- Đảm bảo ngắt kết nối an toàn nếu vòng lặp bị crash
 
   where
     -- Vòng lặp chính đọc dữ liệu từ Handle
@@ -103,29 +100,29 @@ handleClient sock addr serverStateRef = do
     loop h mPlayerId buffer = do
       strictChunk <- (BS.hGetSome h 8192) `catch` \(e :: SomeException) -> do
         putStrLn $ "[TCP] hGetSome Error (" ++ show addr ++ "): " ++ show e
-        pure BS.empty -- Coi như client ngắt kết nối
-
+        pure BS.empty
+        
+      -- Kiểm tra ngắt kết nối
       if BS.null strictChunk && LBS.null buffer
-      then handleDisconnect h mPlayerId serverStateRef -- Client đóng kết nối
+      then handleDisconnect h mPlayerId serverStateRef
       else do
         let fullBuffer = buffer <> fromStrict strictChunk
         processBuffer h mPlayerId fullBuffer
 
-    -- Xử lý buffer một cách đệ quy
+    -- Xử lý buffer
     processBuffer :: Handle -> Maybe Int -> LBS.ByteString -> IO ()
     processBuffer h mPlayerId buffer = do
       let decodeResult = decodeOrFail buffer :: Either (LBS.ByteString, Int64, String) (LBS.ByteString, Int64, ClientTcpPacket)
-      
+      -- Phân tích kết quả decode
       case decodeResult of
-        -- 1. Không đủ dữ liệu -> Quay lại vòng lặp 'loop' để đọc thêm
+        -- Không đủ dữ liệu -> Quay lại vòng lặp 'loop' để đọc thêm
         Left (_, _, _) -> do
           loop h mPlayerId buffer
             
-        -- 2. Decode thành công -> Xử lý gói tin và buffer còn lại
+        -- Decode thành công -> Xử lý gói tin và buffer còn lại
         Right (remainingBuffer, _, pkt) -> do
           
-          -- KIỂM TRA: Nếu client chưa login (mPlayerId == Nothing)
-          -- thì packet *phải* là Login hoặc Register
+          -- Nếu client chưa login (mPlayerId == Nothing) thì packet phải là Login hoặc Register
           when (isNothing mPlayerId && not (isLoginOrRegisterPkt pkt)) $
             fail $ "Received packet before login from " ++ show addr ++ ": " ++ show pkt
 
@@ -133,16 +130,16 @@ handleClient sock addr serverStateRef = do
             
             putStrLn $ "[TCP] Received from " ++ show (fromMaybe 0 mPlayerId) ++ ": " ++ show pkt
             
-            -- 2b. Xử lý Packet, trả về State mới và (Maybe PlayerID, [IO Action])
+            -- Xử lý Packet, trả về State mới và (Maybe PlayerID, [IO Action])
             (sState_final, pid_action) <- processPacket (ssDbConn sState) mPlayerId h pkt sState serverStateRef
             
-            -- 2c. Trả về state cuối cùng và các hành động
+            -- Trả về state cuối cùng và các hành động
             pure (sState_final, pid_action)
           
-          -- 3. Thực thi các hành động IO (bên ngoài MVar)
+          -- Thực thi các hành động IO (bên ngoài MVar)
           sequence_ actions
           
-          -- 4. Đệ quy: Xử lý phần buffer còn dư
+          -- Xử lý phần buffer còn dư
           if LBS.null remainingBuffer
             then loop h new_mPlayerId remainingBuffer -- Hết buffer, quay lại chờ
             else do
@@ -157,14 +154,16 @@ handleClient sock addr serverStateRef = do
     handleDisconnect h mPid serverStateRef = do
       putStrLn $ "[TCP] Client disconnected: " ++ show mPid
       hClose h
+      -- Cập nhật ServerState để xóa client
       case mPid of
-        Nothing -> pure () -- Chưa login, không cần làm gì
+        Nothing -> pure ()
         Just pid -> do
-          -- Lấy ra các hành động (như broadcast) cần làm KHI xóa client
+          -- Lấy ra các hành động cần làm khi xóa client (ví dụ như broadcast)
           actionsToRun <- modifyMVar serverStateRef $ \sState -> do
             let newClients = Map.delete pid (ssClients sState)
             let (mRoom, mRoomId) = findRoomByPlayerId pid sState
-            
+
+            -- Nếu client ở trong phòng, xóa khỏi phòng và broadcast cập nhật
             case (mRoom, mRoomId) of
               (Just room, Just roomId) -> do
                 let newPlayers = Map.delete pid (roomPlayers room)
@@ -188,14 +187,12 @@ handleClient sock addr serverStateRef = do
           -- Chạy các hành động (broadcast) bên ngoài MVar
           sequence_ actionsToRun
 
--- | Hàm PURE xử lý gói tin, trả về State mới và [IO Action]
--- | Hàm này CHẠY BÊN TRONG modifyMVar
--- | Trả về (State Mới, (Maybe PID Mới, [Hành động IO]))
+-- Hàm thuần túy xử lý gói tin, trả về State mới và [IO Action]
 processPacket :: Connection -> Maybe Int -> Handle -> ClientTcpPacket -> ServerState -> MVar ServerState -> IO (ServerState, (Maybe Int, [IO ()]))
 processPacket dbConn mPid h pkt sState serverStateRef =
+  -- Xử lý dựa trên loại gói tin và trạng thái đăng nhập
   case (pkt, mPid) of
-
-    -- === XỬ LÝ ĐĂNG KÝ ===
+    -- Xử lý đăng ký
     (CTP_Register user pass, Nothing) -> do
       eResult <- try (registerUser dbConn user pass) :: IO (Either SomeException (Either String Int))
       case eResult of
@@ -212,7 +209,7 @@ processPacket dbConn mPid h pkt sState serverStateRef =
           let action = sendTcpPacket h (STP_LoginResult False 0 "" "Registration successful. Please log in.")
           pure (sState, (Nothing, [action]))
 
-    -- === XỬ LÝ ĐĂNG NHẬP ===
+    -- Xử lý đăng nhập
     (CTP_Login user pass, Nothing) -> do
       eResult <- try (authenticateUser dbConn user pass) :: IO (Either SomeException (Maybe (Int, T.Text)))
       case eResult of
@@ -234,11 +231,11 @@ processPacket dbConn mPid h pkt sState serverStateRef =
           let newClients = Map.insert pid newClient (ssClients sState)
           -- Cập nhật NextPlayerId để tránh trùng lặp nếu server restart nhưng DB thì không
           let newState = sState { ssClients = newClients, ssNextPlayerId = max (ssNextPlayerId sState) (pid + 1) }
-          
           let action = sendTcpPacket h (STP_LoginResult True pid strUsername "Login successful")
           -- Trả về (Just pid) để cập nhật state của vòng lặp
           pure (newState, (Just pid, [action]))
 
+    -- Xử lý tạo phòng
     (CTP_CreateRoom, Just pid) -> do
       newRoomId <- generateRoomId
       let client = ssClients sState Map.! pid
@@ -247,6 +244,7 @@ processPacket dbConn mPid h pkt sState serverStateRef =
       let action = sendTcpPacket h (STP_RoomUpdate newRoomId [pcInfo client])
       pure (sState { ssRooms = newRooms }, (Just pid, [action]))
 
+    -- Xử lý tham gia phòng
     (CTP_JoinRoom roomId, Just pid) -> do
       case Map.lookup roomId (ssRooms sState) of
         Nothing -> do
@@ -254,7 +252,7 @@ processPacket dbConn mPid h pkt sState serverStateRef =
           pure (sState, (Just pid, [action]))
         
         Just room ->
-          -- Dùng if-then-else lồng nhau (chuẩn Haskell 2010)
+          -- Dùng if-then-else lồng nhau để tránh việc đọc ssRooms nhiều lần trong MVar
           if Map.size (roomPlayers room) >= 2
             then do
               let action = sendTcpPacket h (STP_Kicked "Room is full")
@@ -264,22 +262,20 @@ processPacket dbConn mPid h pkt sState serverStateRef =
                 let action = sendTcpPacket h (STP_Kicked "Game already in progress")
                 pure (sState, (Just pid, [action]))
               else do
-                -- Logic cũ (bây giờ đã an toàn)
                 let client = ssClients sState Map.! pid
                 let newPlayers = Map.insert pid client (roomPlayers room)
                 let updatedRoom = room { roomPlayers = newPlayers }
                 let newRooms = Map.insert roomId updatedRoom (ssRooms sState)
                 let actions = broadcastRoomUpdate updatedRoom
                 pure (sState { ssRooms = newRooms }, (Just pid, actions))
-      
+    
+    -- Xử lý bắt đầu trận PvE Bot Match
     (CTP_StartPvEBotMatch myTank botTank, Just pid) -> do
       putStrLn $ "[TCP] Client " ++ show pid ++ " starting PvE Bot Match."
-
-      -- 1. Tạo phòng mới
+      -- Tạo phòng mới
       newRoomId <- generateRoomId
       let client = ssClients sState Map.! pid
-
-      -- 2. Tạo GameState
+      -- Tạo GameState
       let spawns = ssSpawns sState
       let gameMap = ssMap sState
       let GameMap { gmapWidth = gw, gmapHeight = gh } = gameMap
@@ -306,19 +302,19 @@ processPacket dbConn mPid h pkt sState serverStateRef =
 
       roomGameMVar <- newMVar newRoomGame'
 
-      -- 3. Cập nhật ServerState
+      -- Cập nhật ServerState
       let finalRoom = Room newRoomId (Map.singleton pid client) (Just roomGameMVar) Set.empty
       let finalRooms = Map.insert newRoomId finalRoom (ssRooms sState)
       let udpSock = ssUdpSocket sState
 
-      -- 4. Tạo actions
-      -- Hành động forkIO là an toàn, nó không khóa R-lock ngay lập tức
+      -- Tạo actions. Hành động forkIO là an toàn, nó không khóa R-lock ngay lập tức
       let gameLoopAction = forkIO $ gameLoop udpSock newRoomId roomGameMVar serverStateRef
       let clientAction = sendTcpPacket h (STP_GameStarting PvE)
       let allActions = [void gameLoopAction, clientAction]
 
       pure (sState { ssRooms = finalRooms }, (Just pid, allActions))
 
+    -- Xử lý cập nhật trạng thái sẵn sàng và chọn tank trong lobby
     (CTP_UpdateLobbyState mTank isReady, Just pid) -> do
       let (mRoom, mRoomId) = findRoomByPlayerId pid sState
       case (mRoom, mRoomId) of
@@ -333,9 +329,10 @@ processPacket dbConn mPid h pkt sState serverStateRef =
           let (gameCanStart, pInfos_unsorted) = checkGameStart updatedRoom
           -- Sắp xếp pInfos để đảm bảo player 1 luôn là P1
           let pInfos = case pInfos_unsorted of
-                         (p:ps) -> p : ps -- Giữ nguyên thứ tự (ví dụ: host là P1)
+                         (p:ps) -> p : ps -- Giữ nguyên thứ tự (ví dụ host là P1)
                          [] -> []
 
+          -- Nếu đủ điều kiện bắt đầu game, khởi tạo RoomGameState và forkIO gameLoop
           if gameCanStart && length pInfos == 2
             then do
               putStrLn $ "[TCP] Room " ++ roomId ++ " is starting game!"
@@ -368,7 +365,7 @@ processPacket dbConn mPid h pkt sState serverStateRef =
                   
                   let playerStates = Map.fromList [(fakeAddr1, p1_state), (fakeAddr2, p2_state)]
                   
-                  let newRoomGame = initialRoomGameState gameMap spawns PvP -- <-- SỬA (ssMap sState)
+                  let newRoomGame = initialRoomGameState gameMap spawns PvP
                   let newRoomGame' = newRoomGame { rgsPlayers = playerStates, rgsMatchState = InProgress }
                   
                   roomGameMVar <- newMVar newRoomGame'
@@ -378,7 +375,7 @@ processPacket dbConn mPid h pkt sState serverStateRef =
                   
                   let udpSock = ssUdpSocket sState
 
-                  -- Hành động forkIO là an toàn (không khóa R-lock ngay)
+                  -- Hành động forkIO là an toàn, nó không khóa R-lock ngay lập tức
                   let gameLoopAction = forkIO $ gameLoop udpSock roomId roomGameMVar serverStateRef
                   let broadcastActions = broadcastToRoom finalRoom (STP_GameStarting PvP)
                   let allActions = void gameLoopAction : broadcastActions
@@ -386,7 +383,7 @@ processPacket dbConn mPid h pkt sState serverStateRef =
                   pure (sState { ssRooms = finalRooms }, (Just pid, allActions))
 
                 _ -> do
-                  putStrLn "[TCP] Lỗi: Game start check-pass nhưng tank type là Nothing."
+                  putStrLn "[TCP] Error: Game start check-pass but tank type is Nothing."
                   let actions = broadcastRoomUpdate updatedRoom
                   pure (sState { ssRooms = newRooms }, (Just pid, actions))
             else
@@ -395,12 +392,13 @@ processPacket dbConn mPid h pkt sState serverStateRef =
               in pure (sState { ssRooms = newRooms }, (Just pid, actions))
         _ -> pure (sState, (Just pid, [])) -- Không tìm thấy phòng
 
+    -- Xử lý tạm dừng trò chơi
     (CTP_PauseGame isPaused, Just pid) -> do
-      -- B1: Chỉ lấy mRoomGame (con trỏ MVar) bên trong S-lock
+      -- Chỉ lấy mRoomGame (con trỏ MVar) bên trong S-lock
       let (mRoom, mRoomId) = findRoomByPlayerId pid sState
       let mGameMVar = mRoom >>= roomGame
 
-      -- B2: Tạo action (sẽ chạy bên ngoài S-lock)
+      -- Tạo action (chạy bên ngoài S-lock)
       let actions = case (mRoomId, mGameMVar) of
             (Just roomId, Just gameMVar) ->
               let pauseAction = modifyMVar_ gameMVar $ \rgs -> do
@@ -413,63 +411,63 @@ processPacket dbConn mPid h pkt sState serverStateRef =
               in [pauseAction]
             _ -> [] -- Không tìm thấy phòng hoặc game
       
-      -- B3: Trả về state và action
+      -- Trả về state và action
       pure (sState, (Just pid, actions))
 
+    -- Xử lý rời phòng
     (CTP_LeaveRoom, Just pid) -> do
       let (mRoom, mRoomId) = findRoomByPlayerId pid sState
       let actionToClient = sendTcpPacket h STP_ShowMenu -- Gửi client về menu
-      
+
       let mGameMVar = mRoom >>= roomGame
       
-      -- 1. Kiểm tra xem game đã kết thúc CHƯA (bằng cách 'tryReadMVar')
-      --    Chúng ta dùng 'tryReadMVar' để tránh bị block nếu GameLoop đang giữ MVar
+      -- Kiểm tra xem game đã kết thúc chưa bằng cách dùng 'tryReadMVar' để tránh bị block nếu GameLoop đang giữ MVar
       isGameOver <- case mGameMVar of
-            Nothing -> pure False -- Không có game, không thể "game over"
+            Nothing -> pure False            -- Không có game, không thể "game over"
             Just gameMVar -> do
-              mRgs <- tryReadMVar gameMVar -- Đọc không block
+              mRgs <- tryReadMVar gameMVar   -- Đọc không block
               case mRgs of
-                Nothing -> pure False -- GameLoop đang chạy, giả sử game chưa 'over'
+                Nothing -> pure False        -- GameLoop đang chạy, giả sử game chưa 'over'
                 Just rgs -> 
                   case rgsMatchState rgs of
                     GameOver _ -> pure True  -- Game đã kết thúc
                     _          -> pure False -- Game đang chạy hoặc chờ
       
-      -- 2. Tạo action unpause (chỉ khi game chưa 'over')
+      -- Tạo action unpause (chỉ khi game chưa 'over')
       let unpauseAction = case (mGameMVar, isGameOver) of
-            (Just gameMVar, False) -> -- Chỉ unpause nếu game đang chạy
+            (Just gameMVar, False) ->
               [modifyMVar_ gameMVar (\rgs -> pure rgs { rgsIsPaused = False })]
             _ -> [] -- Không unpause nếu game đã 'over' hoặc không có game
 
-      -- 3. Cập nhật S-lock (state của server)
+      -- Cập nhật S-lock (state của server)
       case (mRoom, mRoomId) of
         (Just room, Just roomId) -> do
           let newPlayers = Map.delete pid (roomPlayers room)
 
-          -- QUAN TRỌNG: Nếu game đã kết thúc, reset roomGame về Nothing
+          -- Nếu game đã kết thúc, reset roomGame về Nothing
           let roomToSave = if isGameOver
                              then room { roomPlayers = newPlayers, roomRematchRequests = Set.empty, roomGame = Nothing }
                              else room { roomPlayers = newPlayers, roomRematchRequests = Set.empty }
 
           if Map.null newPlayers
             then do
-              -- Phòng rỗng, xóa phòng (logic này đã đúng)
+              -- Phòng rỗng, xóa phòng
               putStrLn $ "[TCP] Room " ++ roomId ++ " is empty. Deleting."
               let newState = sState { ssRooms = Map.delete roomId (ssRooms sState) }
               pure (newState, (Just pid, unpauseAction ++ [actionToClient]))
             else do
               -- Phòng còn người, cập nhật phòng
-              let newRooms = Map.insert roomId roomToSave (ssRooms sState) -- Dùng 'roomToSave'
+              let newRooms = Map.insert roomId roomToSave (ssRooms sState)
               let newState = sState { ssRooms = newRooms }
-              let roomUpdateActions = broadcastRoomUpdate roomToSave -- Dùng 'roomToSave'
+              let roomUpdateActions = broadcastRoomUpdate roomToSave
               let rematchClearActions = broadcastToRoom roomToSave (STP_RematchUpdate [])
               let actions = [actionToClient] ++ roomUpdateActions ++ unpauseAction ++ rematchClearActions
               pure (newState, (Just pid, actions))
         _ -> pure (sState, (Just pid, [actionToClient])) -- Không ở trong phòng
 
+    -- Xử lý yêu cầu tái đấu
     (CTP_RequestRematch, Just pid) -> do
       let (mRoom, mRoomId) = findRoomByPlayerId pid sState
-      -- B1: Lấy MVar
       let mGameMVar = mRoom >>= roomGame
 
       case (mRoom, mRoomId, mGameMVar) of
@@ -484,11 +482,11 @@ processPacket dbConn mPid h pkt sState serverStateRef =
             then do
               putStrLn $ "[TCP] Room " ++ roomId ++ " is starting a rematch!"
               
-              -- B2: Lấy GameMode HIỆN TẠI từ MVar (An toàn vì mode không thay đổi)
+              -- Lấy GameMode hiện tại từ MVar (PvP hoặc PvE)
               rgs_peek <- readMVar gameMVar
-              let currentGameMode = rgsMode rgs_peek -- <--- Lấy mode hiện tại (PvP hoặc PvE)
+              let currentGameMode = rgsMode rgs_peek
 
-              -- [SỬA LỖI] Thay thế logic reset vị trí
+              -- Reset trạng thái trò chơi bên trong MVar
               let resetGameAction = modifyMVar_ gameMVar $ \rgs -> do
                     let spawns = rgsSpawns rgs
                     -- Lấy danh sách (SockAddr, PlayerState)
@@ -498,12 +496,11 @@ processPacket dbConn mPid h pkt sState serverStateRef =
                     let resetAndAssign (addr, p) spawnPos = 
                           (addr, p { psHealth = 100
                                    , psLives = 3
-                                   , psPosition = spawnPos -- Gán vị trí spawn mới
+                                   , psPosition = spawnPos
                                    , psLastFireTime = 0.0 
                                    })
                     
-                    -- Ghép người chơi với vị trí spawn (p1 -> spawn1, p2 -> spawn2)
-                    -- Đảm bảo an toàn nếu không có spawn (thêm fallback)
+                    -- Ghép người chơi với vị trí spawn (p1 -> spawn1, p2 -> spawn2). Đảm bảo an toàn nếu không có spawn (thêm fallback)
                     let safeSpawns = if (length spawns) < (length playerAssocs)
                                        then cycle (spawns ++ [Vec2 100 100])
                                        else spawns
@@ -514,17 +511,17 @@ processPacket dbConn mPid h pkt sState serverStateRef =
                     let newPlayersMap = Map.fromList newPlayerAssocs
 
                     let newGameState = (initialRoomGameState (rgsMap rgs) (rgsSpawns rgs) (rgsMode rgs))
-                          { rgsPlayers = newPlayersMap -- Sử dụng Map mới
+                          { rgsPlayers = newPlayersMap
                           , rgsMatchState = InProgress
                           }
                     pure newGameState
 
-              -- B3: Cập nhật S-lock
+              -- Cập nhật S-lock
               let finalRoom = updatedRoom { roomRematchRequests = Set.empty }
               let finalRooms = Map.insert roomId finalRoom (ssRooms sState)
               
-              -- SỬA LỖI: Gửi đúng GameMode đã lấy
-              let broadcastActions = broadcastToRoom finalRoom (STP_GameStarting currentGameMode) -- <--- ĐÃ SỬA
+              -- Gửi đúng GameMode đã lấy
+              let broadcastActions = broadcastToRoom finalRoom (STP_GameStarting currentGameMode)
               
               pure (sState { ssRooms = finalRooms }, (Just pid, resetGameAction : broadcastActions))
               
@@ -538,21 +535,22 @@ processPacket dbConn mPid h pkt sState serverStateRef =
           putStrLn $ "[TCP] Invalid Rematch request from " ++ show pid ++ ". No game found."
           pure (sState, (Just pid, [])) -- Bỏ qua
 
+
     -- ================================================================
     -- TRẠNG THÁI KHÔNG HỢP LỆ
     -- ================================================================
-
     -- Đã đăng nhập nhưng gửi gói tin đăng nhập
     (CTP_Login _ _, Just pid) -> do
       putStrLn $ "[TCP] Warning: Client " ++ show pid ++ " sent Login packet while already logged in."
       pure (sState, (Just pid, []))
+    -- Đã đăng nhập nhưng gửi gói tin đăng ký
     (CTP_Register _ _, Just pid) -> do
       putStrLn $ "[TCP] Warning: Client " ++ show pid ++ " sent Register packet while already logged in."
       pure (sState, (Just pid, []))
 
--- === HÀM TIỆN ÍCH ===
 
--- | Tìm phòng của người chơi (PURE)
+-- HÀM TIỆN ÍCH
+-- Tìm phòng của người chơi (PURE)
 findRoomByPlayerId :: Int -> ServerState -> (Maybe Room, Maybe String)
 findRoomByPlayerId pid sState =
   let found = find (\(_, room) -> Map.member pid (roomPlayers room)) (Map.assocs (ssRooms sState))
@@ -560,19 +558,19 @@ findRoomByPlayerId pid sState =
     Just (roomId, room) -> (Just room, Just roomId)
     Nothing -> (Nothing, Nothing)
 
--- | Tạo [IO ()] để broadcast
+-- Gửi cập nhật phòng đến tất cả người chơi trong phòng (PURE)
 broadcastRoomUpdate :: Room -> [IO ()]
 broadcastRoomUpdate room =
   let playerInfos = map pcInfo (Map.elems (roomPlayers room))
       packet = STP_RoomUpdate (roomMsgId room) playerInfos
   in broadcastToRoom room packet
 
--- | Tạo [IO ()] để broadcast
+-- Gửi gói tin đến tất cả người chơi trong phòng (PURE)
 broadcastToRoom :: Room -> ServerTcpPacket -> [IO ()]
 broadcastToRoom room packet =
   map (\client -> sendTcpPacket (pcHandle client) packet) (Map.elems (roomPlayers room))
 
--- | Kiểm tra xem game có thể bắt đầu (PURE)
+-- Kiểm tra xem game có thể bắt đầu (PURE)
 checkGameStart :: Room -> (Bool, [PlayerInfo])
 checkGameStart room =
   let infos = map pcInfo (Map.elems (roomPlayers room))

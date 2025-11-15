@@ -1,8 +1,8 @@
-# === GIAI ĐOẠN 1: BUILDER (Xây dựng) ===
+# === BUILDER ===
 FROM fpco/stack-build:lts-22.7 AS builder
 WORKDIR /app
 
-# 1. SAO CHÉP CÁC TỆP CẤU HÌNH
+# SAO CHÉP CÁC TỆP CẤU HÌNH
 COPY stack.yaml ./
 COPY stack.yaml.lock ./
 COPY server/package.yaml ./server/
@@ -12,17 +12,17 @@ COPY client/client.cabal ./client/
 COPY shared/package.yaml ./shared/
 COPY shared/shared.cabal ./shared/
 
-# 2. CÀI ĐẶT GHC
+# CÀI ĐẶT GHC
 RUN stack setup
 
-# 3. SAO CHÉP TOÀN BỘ SOURCE CODE
+# SAO CHÉP TOÀN BỘ SOURCE CODE
 COPY . .
 
-# 4. BUILD TẤT CẢ (Dependencies + Code)
+# BUILD TẤT CẢ (Dependencies + Code)
 RUN stack build server:exe:mmo-server --copy-bins --local-bin-path /app/bin
 
 
-# === GIAI ĐOẠN 2: FINAL (Image cuối cùng) ===
+# === FINAL ===
 FROM debian:stable-slim AS final
 
 # Cài đặt thư viện hệ thống

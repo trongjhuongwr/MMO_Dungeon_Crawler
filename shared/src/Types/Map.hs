@@ -11,17 +11,16 @@ import Data.Serialize (Serialize)
 import Data.Array (Array)
 import Data.Binary (Binary)
 
--- | Định danh chi tiết cho từng tile, khớp với cấu trúc file
+-- Định danh chi tiết cho từng tile
 data TileType
-  -- | Vùng rỗng, không thể đi vào -0
-  = Empty
+  = Empty -- Vùng rỗng, không thể đi vào -0
 
-  -- === Sàn === 1-12
+  -- Sàn 1-12
   | Floor_00 | Floor_01 | Floor_02 | Floor_03
   | Floor_04 | Floor_05 | Floor_06 | Floor_07
   | Floor_08 | Floor_09 | Floor_10 | Floor_11
 
-  -- === Cạnh Sàn === 13-22
+  -- Cạnh Sàn 13-22
   | Floor_Edge_DL
   | Floor_Edge_Down_00 | Floor_Edge_Down_01
   | Floor_Edge_DR
@@ -31,17 +30,17 @@ data TileType
   | Floor_Edge_Top_00 | Floor_Edge_Top_01
   | Floor_Edge_TR
 
-  -- === Tường (Nhìn từ trên) === 23-24
+  -- Tường (Nhìn từ trên) 23-24
   | Wall_Back_00 | Wall_Back_01
 
-  -- === Tường (Mặt trước) === 25-27
+  -- Tường (Mặt trước) 25-27
   | Wall_Front_00 | Wall_Front_01 | Wall_Front_02
 
-  -- === Tường (Cạnh trái) === 28-31
+  -- Tường (Cạnh trái) 28-31
   | Wall_Left_01 | Wall_Left_02 
   | Wall_Left_End | Wall_Left_Start
 
-  -- === Tường (Cạnh phải) === 32-35
+  -- Tường (Cạnh phải) 32-35
   | Wall_Right_01 | Wall_Right_02
   | Wall_Right_End | Wall_Right_Start
   

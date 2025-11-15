@@ -7,6 +7,7 @@ import GHC.Generics (Generic)
 import Types.Common (Vec2)
 import Types.Tank (TankType)
 
+-- Trạng thái của một người chơi, do server quản lý và đồng bộ
 data PlayerState = PlayerState
   { psId          :: Int
   , psPosition    :: Vec2
@@ -20,6 +21,7 @@ data PlayerState = PlayerState
 
 instance Binary PlayerState
 
+-- Lệnh của người chơi, do client gửi lên server
 data PlayerCommand = PlayerCommand
   { pcMoveVec     :: Vec2
   , pcTurretAngle :: Float
